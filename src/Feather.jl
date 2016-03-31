@@ -12,7 +12,7 @@ Libdl.dlopen("libfeather.so", Libdl.RTLD_GLOBAL)
 
 const featherso = Pkg.dir("Feather","deps","src","metadata.so")
 
-path = "/home/bates/R/x86_64-unknown-linux-gnu-library/3.2/feather/feather/mtcars.feather"
+path = Pkg.dir("Feather", "test", "data", "mtcars.feather")
 
 mdat = metadata(0, 0, false, pointer(path), path)
 

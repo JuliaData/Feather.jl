@@ -2,46 +2,67 @@
 
 [![Build Status](https://travis-ci.org/dmbates/Feather.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/Feather.jl)
 
-[Feather](http://github.com/wesm/feather) is a format for saving and retrieving data frames.  
-The repository provides the sources for _libfeather_, a C++ library to read and write the feather format,
+[Feather](http://github.com/wesm/feather) is a format for saving and retrieving data frames.  That repository provides the sources for _libfeather_, a C++ library to read and write the feather format,
 and feather packages for `R` and for `Python/pandas`.
 
-A Julia package to read and write the feather format will be built in this repository.
+This repository provides Julia package to read the feather format.  A writer will be added soon.
 
-A reader for the feather format has been added.  Using the package requires that "libfeather.so" be on the LD_LIBRARY_PATH.
+Using the package requires that "libfeather.so" be on the LD_LIBRARY_PATH.
 
-An example of the reader is
+An example using the reader is
 
 ```julia
-julia> using Feather
+julia> using DataFrames, Feather
 
-julia> rr = Feather.Reader(Pkg.dir("Feather", "test", "data", "mtcars.feather"));
+julia> rr = Feather.Reader(Pkg.dir("Feather", "test", "data", "mtcars.feather"))
+[32 × 11] @ /home/bates/.julia/v0.4/Feather/test/data/mtcars.feather
+ mpg   : Float64
+ cyl   : Float64
+ disp  : Float64
+ hp    : Float64
+ drat  : Float64
+ wt    : Float64
+ qsec  : Float64
+ vs    : Float64
+ am    : Float64
+ gear  : Float64
+ carb  : Float64
 
-julia> cols = [rr[i] for i in 1:rr.columns]
-11-element Array{Any,1}:
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x00000000026ab448,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301004,Ptr{Int32} @0x00007f15fe301e58),Ptr{Void} @0x00000000026ab430,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002659478,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301108,Ptr{Int32} @0x00007f15fe301df8),Ptr{Void} @0x0000000002659460,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x00000000024b0b68,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe30120c,Ptr{Int32} @0x00007f15fe301db4),Ptr{Void} @0x00000000024b0b50,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002691e28,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301310,Ptr{Int32} @0x00007f15fe301d60),Ptr{Void} @0x0000000002691e10,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002693e08,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301414,Ptr{Int32} @0x00007f15fe301d1c),Ptr{Void} @0x0000000002693df0,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002692478,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301518,Ptr{Int32} @0x00007f15fe301cd8),Ptr{Void} @0x0000000002692460,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002657038,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe30161c,Ptr{Int32} @0x00007f15fe301c94),Ptr{Void} @0x0000000002657020,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x00000000026abd48,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301720,Ptr{Int32} @0x00007f15fe301c50),Ptr{Void} @0x00000000026abd30,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x00000000026acfd8,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301824,Ptr{Int32} @0x00007f15fe301c10),Ptr{Void} @0x00000000026acfc0,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x000000000271e848,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301928,Ptr{Int32} @0x00007f15fe301bcc),Ptr{Void} @0x000000000271e830,Ptr{Void} @0x0000000000000000)
- Feather.Column(PRIMITIVE::Feather.Column_Type,Ptr{UInt8} @0x0000000002669a18,Feather.Feather_Array(DOUBLE::Feather.Feather_Type,32,0,Ptr{Void} @0x0000000000000000,Ptr{Void} @0x00007f15fe301a2c,Ptr{Int32} @0x00007f15fe301b84),Ptr{Void} @0x0000000002669a00,Ptr{Void} @0x0000000000000000)
 
-julia> names = [bytestring(c.name) for c in cols]
-11-element Array{Any,1}:
- "mpg"
- "cyl"
- "disp"
- "hp"  
- "drat"
- "wt"  
- "qsec"
- "vs"  
- "am"  
- "gear"
- "carb"
+julia> fr = DataFrame(rr)
+32x11 DataFrames.DataFrame
+│ Row │ am  │ carb │ cyl │ disp  │ drat │ gear │ hp    │ mpg  │ qsec  │ vs  │ wt    │
+┝━━━━━┿━━━━━┿━━━━━━┿━━━━━┿━━━━━━━┿━━━━━━┿━━━━━━┿━━━━━━━┿━━━━━━┿━━━━━━━┿━━━━━┿━━━━━━━┥
+│ 1   │ 1.0 │ 4.0  │ 6.0 │ 160.0 │ 3.9  │ 4.0  │ 110.0 │ 21.0 │ 16.46 │ 0.0 │ 2.62  │
+│ 2   │ 1.0 │ 4.0  │ 6.0 │ 160.0 │ 3.9  │ 4.0  │ 110.0 │ 21.0 │ 17.02 │ 0.0 │ 2.875 │
+│ 3   │ 1.0 │ 1.0  │ 4.0 │ 108.0 │ 3.85 │ 4.0  │ 93.0  │ 22.8 │ 18.61 │ 1.0 │ 2.32  │
+│ 4   │ 0.0 │ 1.0  │ 6.0 │ 258.0 │ 3.08 │ 3.0  │ 110.0 │ 21.4 │ 19.44 │ 1.0 │ 3.215 │
+│ 5   │ 0.0 │ 2.0  │ 8.0 │ 360.0 │ 3.15 │ 3.0  │ 175.0 │ 18.7 │ 17.02 │ 0.0 │ 3.44  │
+│ 6   │ 0.0 │ 1.0  │ 6.0 │ 225.0 │ 2.76 │ 3.0  │ 105.0 │ 18.1 │ 20.22 │ 1.0 │ 3.46  │
+│ 7   │ 0.0 │ 4.0  │ 8.0 │ 360.0 │ 3.21 │ 3.0  │ 245.0 │ 14.3 │ 15.84 │ 0.0 │ 3.57  │
+│ 8   │ 0.0 │ 2.0  │ 4.0 │ 146.7 │ 3.69 │ 4.0  │ 62.0  │ 24.4 │ 20.0  │ 1.0 │ 3.19  │
+│ 9   │ 0.0 │ 2.0  │ 4.0 │ 140.8 │ 3.92 │ 4.0  │ 95.0  │ 22.8 │ 22.9  │ 1.0 │ 3.15  │
+│ 10  │ 0.0 │ 4.0  │ 6.0 │ 167.6 │ 3.92 │ 4.0  │ 123.0 │ 19.2 │ 18.3  │ 1.0 │ 3.44  │
+│ 11  │ 0.0 │ 4.0  │ 6.0 │ 167.6 │ 3.92 │ 4.0  │ 123.0 │ 17.8 │ 18.9  │ 1.0 │ 3.44  │
+│ 12  │ 0.0 │ 3.0  │ 8.0 │ 275.8 │ 3.07 │ 3.0  │ 180.0 │ 16.4 │ 17.4  │ 0.0 │ 4.07  │
+│ 13  │ 0.0 │ 3.0  │ 8.0 │ 275.8 │ 3.07 │ 3.0  │ 180.0 │ 17.3 │ 17.6  │ 0.0 │ 3.73  │
+│ 14  │ 0.0 │ 3.0  │ 8.0 │ 275.8 │ 3.07 │ 3.0  │ 180.0 │ 15.2 │ 18.0  │ 0.0 │ 3.78  │
+│ 15  │ 0.0 │ 4.0  │ 8.0 │ 472.0 │ 2.93 │ 3.0  │ 205.0 │ 10.4 │ 17.98 │ 0.0 │ 5.25  │
+│ 16  │ 0.0 │ 4.0  │ 8.0 │ 460.0 │ 3.0  │ 3.0  │ 215.0 │ 10.4 │ 17.82 │ 0.0 │ 5.424 │
+│ 17  │ 0.0 │ 4.0  │ 8.0 │ 440.0 │ 3.23 │ 3.0  │ 230.0 │ 14.7 │ 17.42 │ 0.0 │ 5.345 │
+│ 18  │ 1.0 │ 1.0  │ 4.0 │ 78.7  │ 4.08 │ 4.0  │ 66.0  │ 32.4 │ 19.47 │ 1.0 │ 2.2   │
+│ 19  │ 1.0 │ 2.0  │ 4.0 │ 75.7  │ 4.93 │ 4.0  │ 52.0  │ 30.4 │ 18.52 │ 1.0 │ 1.615 │
+│ 20  │ 1.0 │ 1.0  │ 4.0 │ 71.1  │ 4.22 │ 4.0  │ 65.0  │ 33.9 │ 19.9  │ 1.0 │ 1.835 │
+│ 21  │ 0.0 │ 1.0  │ 4.0 │ 120.1 │ 3.7  │ 3.0  │ 97.0  │ 21.5 │ 20.01 │ 1.0 │ 2.465 │
+│ 22  │ 0.0 │ 2.0  │ 8.0 │ 318.0 │ 2.76 │ 3.0  │ 150.0 │ 15.5 │ 16.87 │ 0.0 │ 3.52  │
+│ 23  │ 0.0 │ 2.0  │ 8.0 │ 304.0 │ 3.15 │ 3.0  │ 150.0 │ 15.2 │ 17.3  │ 0.0 │ 3.435 │
+│ 24  │ 0.0 │ 4.0  │ 8.0 │ 350.0 │ 3.73 │ 3.0  │ 245.0 │ 13.3 │ 15.41 │ 0.0 │ 3.84  │
+│ 25  │ 0.0 │ 2.0  │ 8.0 │ 400.0 │ 3.08 │ 3.0  │ 175.0 │ 19.2 │ 17.05 │ 0.0 │ 3.845 │
+│ 26  │ 1.0 │ 1.0  │ 4.0 │ 79.0  │ 4.08 │ 4.0  │ 66.0  │ 27.3 │ 18.9  │ 1.0 │ 1.935 │
+│ 27  │ 1.0 │ 2.0  │ 4.0 │ 120.3 │ 4.43 │ 5.0  │ 91.0  │ 26.0 │ 16.7  │ 0.0 │ 2.14  │
+│ 28  │ 1.0 │ 2.0  │ 4.0 │ 95.1  │ 3.77 │ 5.0  │ 113.0 │ 30.4 │ 16.9  │ 1.0 │ 1.513 │
+│ 29  │ 1.0 │ 4.0  │ 8.0 │ 351.0 │ 4.22 │ 5.0  │ 264.0 │ 15.8 │ 14.5  │ 0.0 │ 3.17  │
+│ 30  │ 1.0 │ 6.0  │ 6.0 │ 145.0 │ 3.62 │ 5.0  │ 175.0 │ 19.7 │ 15.5  │ 0.0 │ 2.77  │
+│ 31  │ 1.0 │ 8.0  │ 8.0 │ 301.0 │ 3.54 │ 5.0  │ 335.0 │ 15.0 │ 14.6  │ 0.0 │ 3.57  │
+│ 32  │ 1.0 │ 2.0  │ 4.0 │ 121.0 │ 4.11 │ 4.0  │ 109.0 │ 21.4 │ 18.6  │ 1.0 │ 2.78  │
 ```

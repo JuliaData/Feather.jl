@@ -5,7 +5,7 @@
 [Feather](http://github.com/wesm/feather) is a format for saving and retrieving data frames.  That repository provides the sources for _libfeather_, a C++ library to read and write the feather format,
 and feather packages for `R` and for `Python/pandas`.
 
-This repository provides Julia package to read the feather format.  A writer will be added soon.
+This repository provides a Julia package to read the feather format.  A writer will be added soon.
 
 Using the package requires that "libfeather.so" be on the LD_LIBRARY_PATH.
 

@@ -17,6 +17,8 @@ JULIA_CPP_MODULE_BEGIN(registry)
 
   featherjl.add_type<ColumnType>("ColumnType");
 
+  featherjl.add_type<TableReader>("TableReader");
+
   featherjl.method("openFeatherTable", [](const std::string& path)
   {
       std::unique_ptr<TableReader> table;
@@ -37,6 +39,5 @@ JULIA_CPP_MODULE_BEGIN(registry)
 //    .method("user_metadata", &metadata::Column::user_metadata)
 //    .method("values", &metadata::Column::values);
 
-//  featherjl.add_type<TableReader>("TableReader");
 
 JULIA_CPP_MODULE_END

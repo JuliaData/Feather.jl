@@ -17,7 +17,19 @@ JULIA_CPP_MODULE_BEGIN(registry)
 
   featherjl.add_type<ColumnType>("ColumnType");
 
-  featherjl.add_type<TableReader>("TableReader");
+  featherjl.add_type<PrimitiveArray>("PrimitiveArray");
+
+  featherjl.add_type<Column>("Column")
+     .method("name", &Column::name)
+//     .method("values", &Column::values)
+     ;
+
+  featherjl.add_type<TableReader>("TableReader")
+    .method("num_columns", &TableReader::num_columns)
+    .method("num_rows", &TableReader::num_rows)
+    .method("HasDescription", &TableReader::HasDescription)
+    .method("version", &TableReader::version)
+    .method("GetDescription", &TableReader::GetDescription);
 
   featherjl.method("openFeatherTable", [](const std::string& path)
   {
@@ -27,6 +39,21 @@ JULIA_CPP_MODULE_BEGIN(registry)
           std::cout << st.ToString() << std::endl;
       }
       return table;
+  });
+
+  featherjl.method("getcolumn", [](const TableReader rdr, int i)
+  {
+      std::unique_ptr<Column> col;
+      Status st = rdr.GetColumn(i, &col);
+      if (!st.ok()) {
+          std::cout << st.ToString() << std::endl;
+      }
+      return col;
+  });
+
+  featherjl.method("columntype", [](const Column col)
+  {
+      return static_cast<int>(col.type());
   });
 
   featherjl.export_symbols("openFeatherTable");

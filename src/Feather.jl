@@ -1,6 +1,6 @@
 module Feather
 
-using DataFrames
+using DataArrays, DataFrames
 
 ## temporary definition
 const libfeather = Libdl.find_library(["libfeather.so"])

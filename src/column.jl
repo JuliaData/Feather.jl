@@ -14,10 +14,13 @@ Column() = Column(PRIMITIVE, C_NULL, Feather_Array(), C_NULL, C_NULL)
 free(c::Column) = ccall((:feather_column_free, libfeather), Status, (Ref{Column}, ), Ref{c})
 
 function jtype(c::Column)
-    if c.typ ≠ PRIMITIVE
+    if c.typ == PRIMITIVE
+        jtype(c.values)
+#    elseif c.typ == CATEGORY
+#        PooledDataVector{jtype(c.values.levels.values), jtype(c.indices.values)}
+    else
         error("Not yet implemented")
     end
-    jtype(c.values)
 end
 
 function Base.values(c::Column)
@@ -25,4 +28,6 @@ function Base.values(c::Column)
         error("Not yet implemented")
     end
     values(c.values)
-end        
+end
+
+null_count(c::Column) = c.values.null_count

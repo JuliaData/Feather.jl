@@ -18,6 +18,8 @@ end
 
 featherjl = library_dependency("featherjl", aliases=["libfeatherjl"])
 
+cxx_wrap_dir = Pkg.dir("CxxWrap", "deps","usr","lib","cmake")
+
 prefix = joinpath(BinDeps.depsdir(featherjl), "usr")
 featherjl_srcdir = joinpath(BinDeps.depsdir(featherjl), "src")
 featherjl_builddir = joinpath(BinDeps.depsdir(featherjl), "builds")
@@ -27,7 +29,7 @@ provides(BuildProcess,
 		@build_steps begin
 			ChangeDirectory(featherjl_builddir)
 			FileRule(joinpath(prefix, "lib", "$(lib_prefix)featherjl.$lib_suffix"), @build_steps begin
-				`cmake -G "$genopt" -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_BUILD_TYPE="Release" $featherjl_srcdir`
+				`cmake -G "$genopt" -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_BUILD_TYPE="Release" -DCxxWrap_DIR="$cxx_wrap_dir" $featherjl_srcdir`
 				`cmake --build . --config Release --target install`
 			end)
 		end

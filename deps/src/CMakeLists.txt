@@ -2,11 +2,10 @@ project(Featherjl)
 
 cmake_minimum_required(VERSION 3.0)
 
-set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib;${CxxWrap_DIR}/../")
 
 list(APPEND CMAKE_CXX_FLAGS "-std=c++11")
 
-set(CxxWrap_DIR "~/.julia/v0.4/CxxWrap/deps/usr/lib/cmake")
 find_package(CxxWrap)
 
 add_library(featherjl SHARED featherjl.cpp)

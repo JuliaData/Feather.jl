@@ -9,29 +9,30 @@ using namespace feather;
 
 JULIA_CPP_MODULE_BEGIN(registry)
 
-  cxx_wrap::Module& featherjl = registry.create_module("Feather");
+  cxx_wrap::Module& feathercxx = registry.create_module("Feather");
 
-  featherjl.add_type<Status>("Status")
+  feathercxx.add_type<Status>("Status")
     .method("ok", &Status::ok)
     .method("ToString", &Status::ToString);
 
-  featherjl.add_type<ColumnType>("ColumnType");
+//  feathercxx.add_type<PrimitiveArray>("PrimitiveArray");
 
-  featherjl.add_type<PrimitiveArray>("PrimitiveArray");
-
-  featherjl.add_type<Column>("Column")
-     .method("name", &Column::name)
+  feathercxx.add_type<Column>("Column")
+    .method("name", &Column::name)
 //     .method("values", &Column::values)
      ;
 
-  featherjl.add_type<TableReader>("TableReader")
+  feathercxx.add_type<CategoryColumn>("CategoryColumn")
+    .method("ordered", &CategoryColumn::ordered);
+
+  feathercxx.add_type<TableReader>("TableReader")
     .method("num_columns", &TableReader::num_columns)
     .method("num_rows", &TableReader::num_rows)
     .method("HasDescription", &TableReader::HasDescription)
     .method("version", &TableReader::version)
     .method("GetDescription", &TableReader::GetDescription);
 
-  featherjl.method("openFeatherTable", [](const std::string& path)
+  feathercxx.method("openFeatherTable", [](const std::string& path)
   {
       std::unique_ptr<TableReader> table;
       Status st = TableReader::OpenFile(path, &table);
@@ -41,7 +42,7 @@ JULIA_CPP_MODULE_BEGIN(registry)
       return table;
   });
 
-  featherjl.method("getcolumn", [](const TableReader rdr, int i)
+  feathercxx.method("getcolumn", [](const TableReader rdr, int i)
   {
       std::unique_ptr<Column> col;
       Status st = rdr.GetColumn(i, &col);
@@ -51,20 +52,16 @@ JULIA_CPP_MODULE_BEGIN(registry)
       return col;
   });
 
-  featherjl.method("columntype", [](const Column col)
+  feathercxx.method("columntype", [](const Column col)
   {
       return static_cast<int>(col.type());
   });
 
-  featherjl.export_symbols("openFeatherTable");
-
-//  featherjl.add_type<ArrayMetadata>("ArrayMetadata");
-
-//  featherjl.add_type<metadata::Column>("Column")
-//    .method("name", &metadata::Column::name)
-//    .method("type", &metadata::Column::type)
-//    .method("user_metadata", &metadata::Column::user_metadata)
-//    .method("values", &metadata::Column::values);
-
+  feathercxx.method("datatype", [](const Column col)
+  {
+      return static_cast<int>(col.values().type);
+  });
+  
+//  feathercxx.export_symbols("openFeatherTable");
 
 JULIA_CPP_MODULE_END

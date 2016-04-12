@@ -1,15 +1,12 @@
 module Feather
 
-using DataArrays, DataFrames
+using CxxWrap, DataArrays, DataFrames
 
-## temporary definition
-const libfeather = Libdl.find_library(["libfeather.so"])
+wrap_module(Libdl.find_library(["libfeatherjl.so"], [Pkg.dir("Feather", "deps", "usr", "lib")]))
 
-@enum Status OK OOM KEY_ERROR INVALID IO_ERROR NOT_IMPLEMENTED=10 UNKNOWN=50
+export
+    Reader
 
-include("array.jl")
-include("datetime.jl")
-include("column.jl")
 include("reader.jl")
 
 end # module

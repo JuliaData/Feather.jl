@@ -11,8 +11,6 @@ immutable Feather_Array
     offsets::Ptr{Int32}
 end
 
-const jtypes = [Bool, Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64,
-     Float32, Float64, UTF8String, Ptr{Void}]
 
 Feather_Array() = Feather_Array(BOOL, 0, 0, C_NULL, C_NULL, C_NULL)
 

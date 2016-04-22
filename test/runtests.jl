@@ -2,4 +2,4 @@ using Feather
 using Base.Test
 
 # write your own tests here
-@test 1 == 1
+rdr = TableReader(Pkg.dir("Feather", "test", "data", "mtcars.feather"))

@@ -3,8 +3,8 @@ module Feather
 using Cxx
 import DataFrames: names, ncol, nrow
 
-addHeaderDir(Pkg.dir("Feather", "deps", "usr", "include"))
-cxxinclude("feather/metadata_generated.h")
+addHeaderDir(joinpath(dirname(@__FILE__), "..", "deps", "include"))
+cxxinclude(  joinpath(dirname(@__FILE__), "..", "deps", "include", "feather", "metadata_generated.h"))
 
 export
     names,

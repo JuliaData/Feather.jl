@@ -3,8 +3,8 @@ module Feather
 using Cxx
 import DataFrames: names, ncol, nrow
 
-addHeaderDir(joinpath(dirname(@__FILE__), "..", "deps", "include"))
-cxxinclude(  joinpath(dirname(@__FILE__), "..", "deps", "include", "feather", "metadata_generated.h"))
+addHeaderDir(joinpath(dirname(@__FILE__), "..", "deps", "usr", "include"))
+cxxinclude(  joinpath(dirname(@__FILE__), "..", "deps", "usr", "include", "feather", "metadata_generated.h"))
 
 export
     names,
@@ -45,44 +45,23 @@ end
 
 _offset(tbl::Reader, i::Integer) = icxx"$(tbl.ptr)->columns()->Get($i - 1)->values()->offset();"
 _null_count(tbl::Reader, i::Integer) = icxx"$(tbl.ptr)->columns()->Get($i - 1)->values()->null_count();"
-function _type(tbl::Reader, i::Integer)
-    t = icxx"$(tbl.ptr)->columns()->Get($i - 1)->values()->type();"
-    if t == icxx"feather::fbs::Type_BOOL;"
-        return Bool
-    elseif t == icxx"feather::fbs::Type_INT8;"
-        return Int8
-    elseif t == icxx"feather::fbs::Type_INT16;"
-        return Int16
-    elseif t == icxx"feather::fbs::Type_INT32;"
-        return Int32
-    elseif t == icxx"feather::fbs::Type_INT64;"
-        return Int64
-    elseif t == icxx"feather::fbs::Type_UINT8;"
-        return UInt8
-    elseif t == icxx"feather::fbs::Type_UINT16;"
-        return UInt16
-    elseif t == icxx"feather::fbs::Type_UINT32;"
-        return UInt32
-    elseif t == icxx"feather::fbs::Type_UINT64;"
-        return UInt64
-    elseif t == icxx"feather::fbs::Type_FLOAT;"
-        return Float32
-    elseif t == icxx"feather::fbs::Type_DOUBLE;"
-        return Float64
-    elseif t == icxx"feather::fbs::Type_UTF8;"
-        return UTF8String
-    else
-        error("type not handled yet!")
-    end
+const _dtypes = Dict{ASCIIString, DataType}("BOOL" => Bool, "INT8" => Int8, "INT16" => Int16, "INT32" => Int32,
+    "INT64" => Int64, "UINT8" => UInt8, "UINT16" => UInt16, "UINT32" => UInt32, "UINT64" => UInt64,
+    "FLOAT" => Float32, "DOUBLE" => Float64, "UTF8" => UTF8String)
+function _dtype(tbl::Reader, i::Integer)
+    _dtypes[pointer_to_string(icxx"feather::fbs::EnumNameType($(tbl.ptr)->columns()->Get($i - 1)->values()->type());")]
+end
+function _mtype(tbl::Reader, i::Integer)
+    pointer_to_string(icxx"feather::fbs::EnumNameTypeMetadata($(tbl.ptr)->columns()->Get($i - 1)->metadata_type());")
 end
 
 function Column(r::Reader, i::Integer)
     if !(1 <= i <= ncol(r))
-        error("illegal column index")
+        throw(BoundsError(string("Column ", i)))
     end
 
     # fetch element type for column
-    T = _type(r, i)
+    T = _dtype(r, i)
 
     # get pointer to beginning of data
     ptr = pointer(r.buf.data) + _offset(r, i)
@@ -102,7 +81,7 @@ function Column(r::Reader, i::Integer)
         bitmask = Nullable{BitArray{1}}()
     end
 
-    return Column{T}(r, i, convert(Ptr{T}, ptr + nullbytes), bitmask)
+    return Column{T}(r, i, convert(Ptr{T}, ptr), bitmask)
 end
 
 Base.size(c::Column) = (nrow(c.r),)

@@ -7,35 +7,31 @@ and feather packages for `R` and for `Python/pandas`.
 
 This repository provides a Julia package to read the feather format.  A writer will be added soon.
 
-Using the package requires that "libfeather.so" be on the LD_LIBRARY_PATH.
-
-An example using the reader is
+This version requires Julia 0.5- and the [Cxx package](https://github.com/Keno/Cxx.jl)
 
 ```julia
 julia> using Feather
 
-julia> Reader(Pkg.dir("Feather", "test", "data", "mtcars.feather"))
-[32 × 11] @ /home/bates/.julia/v0.4/Feather/test/data/mtcars.feather
- mpg   : PRIMITIVE(Float64)
- cyl   : PRIMITIVE(Float64)
- disp  : PRIMITIVE(Float64)
- hp    : PRIMITIVE(Float64)
- drat  : PRIMITIVE(Float64)
- wt    : PRIMITIVE(Float64)
- qsec  : PRIMITIVE(Float64)
- vs    : PRIMITIVE(Float64)
- am    : PRIMITIVE(Float64)
- gear  : PRIMITIVE(Float64)
- carb  : PRIMITIVE(Float64)
+julia> iris = Feather.Reader(Pkg.dir("Feather", "test", "data", "iris.feather"));
 
- julia> rr = Reader(Pkg.dir("Feather", "test", "data", "iris.feather"));
+julia> nrow(iris)
+150
 
- julia> rr
- [150 × 5] @ /home/bates/.julia/v0.4/Feather/test/data/iris.feather
-  Sepal.Length  : PRIMITIVE(Float64)
-  Sepal.Width   : PRIMITIVE(Float64)
-  Petal.Length  : PRIMITIVE(Float64)
-  Petal.Width   : PRIMITIVE(Float64)
-  Species       : CATEGORY(Int32)
+julia> ncol(iris)
+150
+
+julia> names(iris)
+5-element Array{ByteString,1}:
+ "Sepal.Length"
+ "Sepal.Width"
+ "Petal.Length"
+ "Petal.Width"
+ "Species"     
+
+julia> Feather._dtype(iris, 5)
+Int32
+
+julia> Feather._mtype(iris, 5)
+"CategoryMetadata"
 
 ```

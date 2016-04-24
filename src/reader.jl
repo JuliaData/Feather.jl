@@ -27,3 +27,14 @@ names(rdr::Reader) = map(name, rdr.columns)
 Base.size(rdr::Reader) = (nrow(rdr), ncol(rdr))
 Base.size(rdr::Reader, i::Integer) = i == 1 ? nrow(rdr) : i == 2 ? ncol(rdr) : 1
 Base.getindex(rdr::Reader, i::Integer) = rdr.columns[i]
+
+function Base.show(io::IO, r::Reader)
+    println(io, string('[', nrow(r), " × ", ncol(r), "] @ ", r.path))
+    nms = names(r)
+    mxnm = maximum(map(length, nms)) + 2
+    for i in eachindex(nms)
+        coli = r[i]
+        metatyp = coli.meta == "NONE" ? "" : string("(", coli.meta, ")")
+        println(io, " ", rpad(nms[i], mxnm), ": ", eltype(coli.values), metatyp)
+    end
+end

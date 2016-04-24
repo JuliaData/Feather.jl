@@ -28,10 +28,71 @@ julia> names(iris)
  "Petal.Width"
  "Species"     
 
-julia> Feather._dtype(iris, 5)
-Int32
+julia> iris[5].values
+150-element Feather.Primitive{Int32}:
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ ⋮
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
+ 2
 
-julia> Feather._mtype(iris, 5)
+julia> iris[5].meta
 "CategoryMetadata"
 
 ```

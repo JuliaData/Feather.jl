@@ -1,6 +1,6 @@
 type Primitive{T} <: DenseVector{T}
     values::Vector{T}
-    nulls::Vector{Int64}
+    bitmask::BitArray{1}
 end
 
 const _dtypes = Dict{ASCIIString, DataType}("BOOL" => Bool, "INT8" => Int8, "INT16" => Int16, "INT32" => Int32,
@@ -11,17 +11,24 @@ function _dtype(cpt::Cxx.CppPtr)
 end
 
 function Primitive(ppt::Cxx.CppPtr, bpt::Ptr{UInt8})
-    T = _dtype(ppt)
-    n = icxx"$ppt->length();"
-    o = icxx"$ppt->offset();"
-    v = pointer_to_array(reinterpret(Ptr{T}, bpt + o), n)
-    o += n * sizeof(T)
-    nc = icxx"$ppt->null_count();"
-    Primitive{T}(v, nc == 0 ? Int32[] : pointer_to_array(reinterpret(Ptr{Int64}, bpt + o), nc))
+    T, n, o = _dtype(ppt), icxx"$ppt->length();", icxx"$ppt->offset();"
+    bitmask = BitArray{1}()
+        # check if there are missing values
+    if (nc = icxx"$ppt->null_count();") > 0
+        # missing values are marked with bitmask which is stored first in chuncks of 32 bits
+        bitmask = BitArray{1}(n)
+        nullbytes = 1
+        while nullbytes << 3 < n
+            nullbytes += 1
+        end
+        Base.unsafe_copy!(convert(Ptr{UInt8}, pointer(bitmask.chunks)), bpt + o, nullbytes)
+        o += nullbytes
+    end
+    Primitive{T}(pointer_to_array(reinterpret(Ptr{T}, bpt + o), n), bitmask)
 end
 
 Base.size(pr::Primitive) = size(pr.values)
 Base.getindex(pr::Primitive, i) = pr.values[i]
 Base.eltype{T}(pr::Primitive{T}) = T
 
-nulls(pr::Primitive) = pr.nulls
+nulls(pr::Primitive) = find(!pr.bitmask)

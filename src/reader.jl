@@ -24,6 +24,6 @@ nrow(rdr::Reader) = icxx"$(rdr.tpt)->num_rows();"
 ncol(rdr::Reader) = length(rdr.columns)
 names(rdr::Reader) = map(name, rdr.columns)
 
-Base.size(rdr::Reader) = (nrow(rdr), ncol())
+Base.size(rdr::Reader) = (nrow(rdr), ncol(rdr))
 Base.size(rdr::Reader, i::Integer) = i == 1 ? nrow(rdr) : i == 2 ? ncol(rdr) : 1
 Base.getindex(rdr::Reader, i::Integer) = rdr.columns[i]

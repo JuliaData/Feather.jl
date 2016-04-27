@@ -13,14 +13,9 @@ end
 function Primitive(ppt::Cxx.CppPtr, bpt::Ptr{UInt8})
     T, n, o = _dtype(ppt), icxx"$ppt->length();", icxx"$ppt->offset();"
     bitmask = BitArray{1}()
-        # check if there are missing values
-    if (nc = icxx"$ppt->null_count();") > 0
-        # missing values are marked with bitmask which is stored first in chuncks of 32 bits
+    if (nc = icxx"$ppt->null_count();") > 0  # any missing values?
+        nullbytes = icxx"$ppt->total_bytes();" - n * sizeof(T)
         bitmask = BitArray{1}(n)
-        nullbytes = 1
-        while nullbytes << 3 < n
-            nullbytes += 1
-        end
         Base.unsafe_copy!(convert(Ptr{UInt8}, pointer(bitmask.chunks)), bpt + o, nullbytes)
         o += nullbytes
     end

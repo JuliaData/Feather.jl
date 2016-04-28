@@ -38,3 +38,7 @@ function Base.show(io::IO, r::Reader)
         println(io, " ", rpad(nms[i], mxnm), ": ", eltype(coli.values), metatyp)
     end
 end
+
+function DataFrames.DataFrame(rdr::Reader)
+    DataFrame(convert(Vector{Any}, [c.values for c in rdr.columns]), map(Symbol, names(rdr)))
+end

@@ -1,9 +1,14 @@
 type Reader
     path::AbstractString
-    tpt::Cxx.CppPtr
+    tpt::CTablePt
     buf::IO
     columns::Vector{Column}
 end
+
+columns(ct::CTablePt) = icxx"$ct->columns();"
+description(ct::CTablePt) = pointer_to_string(icxx"$ct->description();")
+nrow(ct::CTablePt) = icxx"$ct->num_rows();"
+version(ct::CTablePt) = icxx"$ct->version();"
 
 function Reader(path::AbstractString)
     io = IOBuffer(Mmap.mmap(path))
@@ -15,7 +20,7 @@ function Reader(path::AbstractString)
         throw(ArgumentError(string("File: ", path, " is not in feather format")))
     end
     tpt = icxx"feather::fbs::GetCTable($(pointer(io.data) + pos));"
-    cpt = icxx"$tpt->columns();"
+    cpt = columns(tpt)
     cols = [Column(cpt, i, bpt) for i in 1:icxx"$cpt->size();"]
     Reader(path, tpt, io, cols)
 end

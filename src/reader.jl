@@ -37,10 +37,8 @@ function Base.show(io::IO, r::Reader)
     println(io, string('[', nrow(r), " × ", ncol(r), "] @ ", r.path))
     nms = names(r)
     mxnm = maximum(map(length, nms)) + 2
-    for i in eachindex(nms)
-        coli = r[i]
-        metatyp = coli.meta == "NONE" ? "" : string("(", coli.meta, ")")
-        println(io, " ", rpad(nms[i], mxnm), ": ", eltype(coli.values), metatyp)
+    for coli in r.columns
+        println(io, " ", rpad(coli.name, mxnm), ": ", typeof(coli.values))
     end
 end
 

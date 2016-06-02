@@ -7,8 +7,9 @@ end
 
 columns(ct::CTablePt) = icxx"$ct->columns();"
 description(ct::CTablePt) = pointer_to_string(icxx"$ct->description();")
-nrow(ct::CTablePt) = icxx"$ct->num_rows();"
+DataFrames.nrow(ct::CTablePt) = icxx"$ct->num_rows();"
 version(ct::CTablePt) = icxx"$ct->version();"
+
 
 function Reader(path::AbstractString)
     io = IOBuffer(Mmap.mmap(path))
@@ -25,13 +26,21 @@ function Reader(path::AbstractString)
     Reader(path, tpt, io, cols)
 end
 
-nrow(rdr::Reader) = icxx"$(rdr.tpt)->num_rows();"
-ncol(rdr::Reader) = length(rdr.columns)
-names(rdr::Reader) = map(name, rdr.columns)
+DataFrames.nrow(rdr::Reader) = icxx"$(rdr.tpt)->num_rows();"
+DataFrames.ncol(rdr::Reader) = length(rdr.columns)
+DataFrames.names(rdr::Reader) = map(name, rdr.columns)
 
 Base.size(rdr::Reader) = (nrow(rdr), ncol(rdr))
 Base.size(rdr::Reader, i::Integer) = i == 1 ? nrow(rdr) : i == 2 ? ncol(rdr) : 1
 Base.getindex(rdr::Reader, i::Integer) = rdr.columns[i]
+function Base.getindex(rdr::Reader, s::String)
+    i = findfirst(nm -> nm == s, names(rdr))
+    if i < 1
+        throw(BoundsError(string("\"", s, "\" is not a column name")))
+    end
+    rdr[i]
+end
+Base.getindex(rdr::Reader, s::Symbol) = rdr[string(s)]
 
 function Base.show(io::IO, r::Reader)
     println(io, string('[', nrow(r), " × ", ncol(r), "] @ ", r.path))

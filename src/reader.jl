@@ -34,11 +34,11 @@ Base.size(rdr::Reader) = (nrow(rdr), ncol(rdr))
 Base.size(rdr::Reader, i::Integer) = i == 1 ? nrow(rdr) : i == 2 ? ncol(rdr) : 1
 Base.getindex(rdr::Reader, i::Integer) = rdr.columns[i]
 function Base.getindex(rdr::Reader, s::String)
-    i = findfirst(nm -> nm == s, names(rdr))
+    i = findfirst(names(rdr), s)
     if i < 1
-        throw(BoundsError(string("\"", s, "\" is not a column name")))
+        throw(BoundsError(s))
     end
-    rdr[i]
+    rdr[i].values
 end
 Base.getindex(rdr::Reader, s::Symbol) = rdr[string(s)]
 

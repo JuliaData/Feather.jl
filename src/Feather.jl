@@ -1,5 +1,9 @@
 module Feather
 
+if VERSION < v"0.5.0-dev+4631"
+    unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
+end
+
 using Arrow, FlatBuffers
 
 # sync with feather version
@@ -56,9 +60,9 @@ function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_,
     levelinfo = meta.levels
     len = levelinfo.length
     ptr = pointer(data) + levelinfo.offset
-    offsets = pointer_to_array(convert(Ptr{Int32}, ptr), len+1)
+    offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), len+1)
     ptr += sizeof(offsets)
-    levels = tuple(map(x->Symbol(String(ptr + offsets[x], offsets[x+1] - offsets[x])), 1:len)...)
+    levels = tuple(map(x->Symbol(unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x])), 1:len)...)
     return Arrow.Category{meta.ordered,Type_2julia[values_type],levels}
 end
 juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.Type_, data) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
@@ -98,7 +102,7 @@ function read(file::AbstractString)
             nulls = BitArray(rows)
             if rows >= 64
                 # this is safe because we keep a reference to mmap in our Arrow.Column
-                chunks = pointer_to_array(pointer(m) + values.offset, bytes_for_bits(rows))
+                chunks = unsafe_wrap(Array, pointer(m) + values.offset, bytes_for_bits(rows))
             else
                 # need to pad our Vector{UInt8} to be big enough to hold a full UInt64
                 chunks = m[(values.offset + 1):(values.offset + bytes_for_bits(rows))]
@@ -114,11 +118,11 @@ function read(file::AbstractString)
         feather_type = values.type_
         if isprimitive(feather_type)
             ptr = convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes)
-            column = Arrow.Column(m, rows, null_count, nulls, pointer_to_array(ptr, rows))
+            column = Arrow.Column(m, rows, null_count, nulls, unsafe_wrap(Array, ptr, rows))
         else # list types
             ptr = pointer(m) + values.offset + bitmask_bytes
-            offsets = pointer_to_array(convert(Ptr{Int32}, ptr), rows+1)
-            values = pointer_to_array(ptr + sizeof(offsets), offsets[end])
+            offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), rows+1)
+            values = unsafe_wrap(Array, ptr + sizeof(offsets), offsets[end])
             column = Arrow.List{feather_type,typ}(m, rows, null_count, nulls, offsets, values)
         end
         #TODO: to fully comply with Arrow format, we'll need to pad nulls/values to 64-byte alignments

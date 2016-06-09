@@ -1,7 +1,7 @@
 using Feather
 using Base.Test
 
-testdir = joinpath(dirname(@__FILE__),"test", "data")
+testdir = joinpath(dirname(@__FILE__), "data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 for f in files
     dt = Feather.read(file)

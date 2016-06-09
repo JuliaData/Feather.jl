@@ -1,7 +1,12 @@
 module Feather
 
-if VERSION < v"0.5.0-dev+4631"
+if !isdefined(Core, :String)
+    typealias String UTF8String
+end
+
+if Base.VERSION < v"0.5.0-dev+4631"
     unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
+    unsafe_string(ptr, len) = utf8(ptr, len)
 end
 
 using Arrow, FlatBuffers
@@ -45,7 +50,7 @@ const NON_PRIMITIVE_TYPES = Set(Metadata.Type_[Metadata.UTF8,Metadata.BINARY])
 isprimitive(x::Metadata.Type_) = x in NON_PRIMITIVE_TYPES ? false : true
 
 "maps Julia types to Arrow/Feather type enum values"
-const julia2Type_ = Dict{DataType,Metadata.Type_}(filter(x->!(x[2] in NON_PRIMITIVE_TYPES),v=>k for (k,v) in Type_2julia))
+const julia2Type_ = Dict{DataType,Metadata.Type_}([v=>k for (k,v) in Type_2julia])
 
 const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
     Metadata.SECOND => Arrow.Second,
@@ -53,7 +58,7 @@ const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
     Metadata.MICROSECOND => Arrow.Microsecond,
     Metadata.NANOSECOND => Arrow.Nanosecond
 )
-const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in TimeUnit2julia)
+const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([v=>k for (k,v) in TimeUnit2julia])
 
 juliatype(meta::Void, values_type::Metadata.Type_, data) = Type_2julia[values_type]
 function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_, data)
@@ -99,7 +104,7 @@ function read(file::AbstractString)
         values = col.values
         null_count = Int32(values.null_count)
         if null_count > 0
-            nulls = BitArray(rows)
+            nulls = BitArray(Int64(rows))
             if rows >= 64
                 # this is safe because we keep a reference to mmap in our Arrow.Column
                 chunks = unsafe_wrap(Array, pointer(m) + values.offset, bytes_for_bits(rows))
@@ -112,7 +117,7 @@ function read(file::AbstractString)
             end
             nulls.chunks = reinterpret(UInt64,chunks)
         else
-            nulls = trues(rows)
+            nulls = trues(Int64(rows))
         end
         bitmask_bytes = null_count == 0 ? 0 : bytes_for_bits(rows)
         feather_type = values.type_
@@ -177,8 +182,8 @@ function writecolumn{A,T}(io, arr::Arrow.List{A,T})
     return total_bytes
 end
 
-"write a Arrow dataframe out to a feather file"
-function write(header, data::Vector{Arrow.AbstractColumn}, file::AbstractString, desc::String="", metadata::String="")
+# "write a Arrow dataframe out to a feather file"
+function write(header, data::Vector{Arrow.AbstractColumn}, file::AbstractString, desc="", metadata="")
     io = open(file, "w")
     Base.write(io, FEATHER_MAGIC_BYTES)
     # write out arrays, building each array's metadata as we go
@@ -199,7 +204,7 @@ function write(header, data::Vector{Arrow.AbstractColumn}, file::AbstractString,
         # write out array values
         total_bytes += writecolumn(io, arr)
         values = Metadata.PrimitiveArray(feathertype(arr), Metadata.PLAIN, offset, len, null_count, total_bytes)
-        push!(columns, Metadata.Column(name, values, getmetadata(io, arr), ""))
+        push!(columns, Metadata.Column(name, values, getmetadata(io, arr), String("")))
     end
     # write out metadata
     meta = FlatBuffers.Builder(Metadata.CTable)

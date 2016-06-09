@@ -4,7 +4,7 @@ using Base.Test
 testdir = joinpath(dirname(@__FILE__), "data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 for f in files
-    dt = Feather.read(file)
+    dt = Feather.read(f)
     temp = tempname()
     Feather.write(dt[1], dt[2], temp)
     dt2 = Feather.read(temp)

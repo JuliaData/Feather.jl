@@ -1,6 +1,6 @@
 module Metadata
 
-include(joinpath(Pkg.dir("FlatBuffers"), "src/header.jl"))
+using FlatBuffers
 
 @enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
   UINT8 = 5, UINT16 = 6, UINT32 = 7, UINT64 = 8,

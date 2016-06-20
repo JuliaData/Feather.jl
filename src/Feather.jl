@@ -12,6 +12,10 @@ if !isdefined(Core, :String)
     typealias String UTF8String
 end
 
+if !isdefined(Base, :view)
+    view = sub
+end
+
 if Base.VERSION < v"0.5.0-dev+4631"
     unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
     unsafe_string(ptr, len) = utf8(ptr, len)
@@ -204,18 +208,18 @@ function getmetadata{O,I,T}(io, ::AbstractVector{Nullable{Arrow.Category{O,I,T}}
         offsets[i + 1] = off
     end
     offset = position(io)
-    total_bytes = Base.write(io, sub(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
+    total_bytes = Base.write(io, view(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
     total_bytes += Base.write(io, collect(values))
     return Metadata.CategoryMetadata(Metadata.PrimitiveArray(julia2Type_[I], Metadata.PLAIN, offset, len, 0, total_bytes), O)
 end
 
 # Category
 function writecolumn{O,I,T}(io, A::AbstractVector{Nullable{Arrow.Category{O,I,T}}})
-    return Base.write(io, sub(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(I))))
+    return Base.write(io, view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(I))))
 end
 # Date, Timestamp, Time, and other primitive T
 function writecolumn{T}(io, A::AbstractVector{Nullable{T}})
-    return Base.write(io, sub(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(T))))
+    return Base.write(io, view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(T))))
 end
 # List types
 function writecolumn{T<:Union{Vector{UInt8},String}}(io, arr::AbstractVector{Nullable{T}})
@@ -227,9 +231,9 @@ function writecolumn{T<:Union{Vector{UInt8},String}}(io, arr::AbstractVector{Nul
         off += length(v)
         offsets[i + 1] = off
     end
-    Base.write(io, sub(reinterpret(UInt8, offsets), 1:total_bytes))
+    Base.write(io, view(reinterpret(UInt8, offsets), 1:total_bytes))
     total_bytes += values_bytes = offsets[len+1]
-    Base.write(io, sub(reinterpret(UInt8, arr.values), 1:values_bytes))
+    Base.write(io, view(reinterpret(UInt8, arr.values), 1:values_bytes))
     return total_bytes
 end
 
@@ -265,7 +269,7 @@ function Data.stream!(df::DataFrame, sink::Sink)
         if null_count > 0
             total_bytes += null_bytes = Feather.bytes_for_bits(len)
             bytes = BitArray(!arr.isnull)
-            Base.write(io, sub(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
+            Base.write(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
         end
         # write out array values
         total_bytes += writecolumn(io, arr)
@@ -276,7 +280,7 @@ function Data.stream!(df::DataFrame, sink::Sink)
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
     meta = FlatBuffers.build!(ctable)
     rng = (meta.head + 1):length(meta.bytes)
-    Base.write(io, sub(meta.bytes, rng))
+    Base.write(io, view(meta.bytes, rng))
     # write out metadata size
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes

@@ -1,5 +1,9 @@
 module Metadata
 
+if !isdefined(Core, :String)
+    typealias String UTF8String
+end
+
 using FlatBuffers
 
 @enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,

@@ -1,4 +1,3 @@
-VERSION >= v"0.4.0-dev+6521" && __precompile__(true)
 """
 package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather) and loading into a Julia DataFrame.
 
@@ -25,7 +24,7 @@ using FlatBuffers, DataStreams, DataFrames, NullableArrays, WeakRefStrings
 
 export Data
 
-# sync with feather version
+# sync with feather
 const VERSION = 1
 
 # flatbuffer defintions

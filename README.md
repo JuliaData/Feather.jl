@@ -1,6 +1,6 @@
 # Feather
 
-[![Build Status](https://travis-ci.org/dmbates/Feather.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/Feather.jl)
+[![Build Status](https://travis-ci.org/JuliaStats/Feather.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/Feather.jl)
 
 Package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather) and loading into a Julia DataFrame.
 

@@ -273,7 +273,7 @@ function Data.stream!(df::DataFrame, sink::Sink)
         # write out array values
         total_bytes += writecolumn(io, arr)
         values = Metadata.PrimitiveArray(feathertype(arr), Metadata.PLAIN, offset, len, null_count, total_bytes)
-        push!(columns, Metadata.Column(name, values, getmetadata(io, arr), String("")))
+        push!(columns, Metadata.Column(String(name), values, getmetadata(io, arr), String("")))
     end
     # write out metadata
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)

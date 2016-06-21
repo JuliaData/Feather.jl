@@ -28,10 +28,10 @@ export Data
 const VERSION = 1
 
 # flatbuffer defintions
-include(joinpath(Pkg.dir("Feather"), "src/metadata.jl"))
+include("metadata.jl")
 
 # Arrow type definitions
-include(joinpath(Pkg.dir("Feather"), "src/Arrow.jl"))
+include("Arrow.jl")
 
 # wesm/feather/cpp/src/common.h
 const FEATHER_MAGIC_BYTES = "FEA1".data

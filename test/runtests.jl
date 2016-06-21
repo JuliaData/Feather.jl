@@ -1,7 +1,7 @@
 using Feather, DataFrames
 using Base.Test
 
-testdir = joinpath(Pkg.dir("Feather"), "test/data")
+testdir = joinpath(dirname(@__FILE__), "data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 for f in files
     source = Feather.Source(f)

@@ -125,7 +125,7 @@ function Source(file::AbstractString)
     length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format"))
     (m[1:4] == FEATHER_MAGIC_BYTES && m[end-3:end] == FEATHER_MAGIC_BYTES) ||
         throw(ArgumentError("'$file' is not in the feather format"))
-    # read file metadata
+    # read file metadata using FlatBuffers
     metalength = Base.read(IOBuffer(m[length(m)-7:length(m)-4]), Int32)
     metapos = length(m) - (metalength + 7)
     rootpos = Base.read(IOBuffer(m[metapos:metapos+4]), Int32)
@@ -137,22 +137,24 @@ function Source(file::AbstractString)
         push!(header, col.name)
         push!(types, juliatype(col.metadata, col.values.type_, m))
     end
+    # construct Data.Schema and Feather.Source
     return Source(Data.Schema(header, types, ctable.num_rows, Dict("parent"=>m)), ctable, m)
 end
 
 function Data.stream!(source::Source, ::Type{DataFrame})
-    # read the actual data
     data = []
     rows = Int32(source.ctable.num_rows)
     columns = source.ctable.columns
     types = source.schema.types
     m = source.data
     parent = source.schema.metadata["parent"]
+    # create a corresponding Julia NullableVector for each feather array
     for i = 1:length(columns)
         col = columns[i]
         typ = types[i]
         values = col.values
         if values.null_count > 0
+            # read feather null bitarray
             bitmask_bytes = Feather.bytes_for_bits(rows)
             nulls = zeros(Bool, rows)
             for x = 1:rows
@@ -163,19 +165,20 @@ function Data.stream!(source::Source, ::Type{DataFrame})
             nulls = zeros(Bool, rows)
         end
         if isprimitive(values.type_)
-            # handle Date/Time/Timestamp/Category
+            # for primitive types, we can just "wrap" the feather pointer
             arr = unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows)
             column = NullableArray{eltype(arr),1}(arr, nulls, parent)
-        else # list types
+        else
+            # for string types, we need to manually construct based on each elements length
             ptr = pointer(m) + values.offset + bitmask_bytes
             offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), rows+1)
             values = unsafe_wrap(Array, ptr + sizeof(offsets), offsets[end])
-            arr = WeakRefString[WeakRefString(pointer(values,offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:rows]
-            column = NullableArray{WeakRefString,1}(arr, nulls, parent)
+            arr = WeakRefString{UInt8}[WeakRefString(pointer(values,offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:rows]
+            column = NullableArray{WeakRefString{UInt8},1}(arr, nulls, parent)
         end
         push!(data, column)
     end
-    return DataFrame(data, DataFrames.Index(map(Symbol, source.schema.header)))
+    return DataFrame(data, map(Symbol, source.schema.header))
 end
 
 "read a feather-formatted binary file into a Julia DataFrame"
@@ -196,7 +199,7 @@ feathertype{T<:AbstractString}(::AbstractVector{Nullable{T}}) = Metadata.UTF8
 getmetadata{T}(io, a::AbstractVector{T}) = nothing
 getmetadata(io, ::AbstractVector{Nullable{Date}}) = Metadata.DateMetadata()
 getmetadata{T}(io, ::AbstractVector{Nullable{Arrow.Time{T}}}) = Metadata.TimeMetadata(julia2TimeUnit[T])
-getmetadata(io, ::AbstractVector{Nullable{DateTime}}) = Metadata.TimestampMetadata(Arrow.Millisecond, "")
+getmetadata(io, ::AbstractVector{Nullable{DateTime}}) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
 function getmetadata{O,I,T}(io, ::AbstractVector{Nullable{Arrow.Category{O,I,T}}})
     len = length(T)
     offsets = zeros(Int32, len+1)
@@ -216,12 +219,20 @@ end
 function writecolumn{O,I,T}(io, A::AbstractVector{Nullable{Arrow.Category{O,I,T}}})
     return Base.write(io, view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(I))))
 end
-# Date, Timestamp, Time, and other primitive T
+# Date
+function writecolumn(io, A::AbstractVector{Nullable{Date}})
+    return Base.write(io, view(reinterpret(UInt8, map(Arrow.date2unix, A.values)), 1:(length(A) * sizeof(Int32))))
+end
+# Timestamp
+function writecolumn(io, A::AbstractVector{Nullable{DateTime}})
+    return Base.write(io, view(reinterpret(UInt8, map(Arrow.datetime2unix, A.values)), 1:(length(A) * sizeof(Int64))))
+end
+# Date, Timestamp, Time and other primitive T
 function writecolumn{T}(io, A::AbstractVector{Nullable{T}})
     return Base.write(io, view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(T))))
 end
 # List types
-function writecolumn{T<:Union{Vector{UInt8},String}}(io, arr::AbstractVector{Nullable{T}})
+function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, arr::AbstractVector{Nullable{T}})
     len = length(arr)
     total_bytes = sizeof(Int32) * (len+1)
     offsets = zeros(Int32, len+1)
@@ -232,7 +243,12 @@ function writecolumn{T<:Union{Vector{UInt8},String}}(io, arr::AbstractVector{Nul
     end
     Base.write(io, view(reinterpret(UInt8, offsets), 1:total_bytes))
     total_bytes += values_bytes = offsets[len+1]
-    Base.write(io, view(reinterpret(UInt8, arr.values), 1:values_bytes))
+    for val in arr
+        isnull(val) && continue
+        # might be String, Vector{UInt8}, WeakRefString
+        v = convert(String, get(val))
+        Base.write(io, v.data)
+    end
     return total_bytes
 end
 

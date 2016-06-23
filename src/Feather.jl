@@ -307,7 +307,7 @@ function Data.stream!(df::DataFrame, sink::Sink)
 end
 
 "write a Julia DataFrame to a feather-formatted binary file"
-function write(file::AbstractString, df::DataFrame;description::AbstractString="", metadata::AbstractString="")
+function write(file::AbstractString, df::DataFrame;description::AbstractString=String(""), metadata::AbstractString=String(""))
     sink = Sink(file; description=description, metadata=metadata)
     return Data.stream!(df, sink)
 end

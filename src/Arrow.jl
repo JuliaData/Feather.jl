@@ -47,7 +47,7 @@ end
 
 const UNIXEPOCH_DT = Dates.value(Dates.Date(1970))
 function unix2date(x)
-    rata = UNIXEPOCH_DT + x
+    rata = UNIXEPOCH_DT + x.value
     return Dates.Date(Dates.UTD(rata))
 end
 date2unix(x::Dates.Date) = Int32(Dates.value(x) - UNIXEPOCH_DT)

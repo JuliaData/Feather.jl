@@ -1,5 +1,5 @@
 """
-package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather) and loading into a Julia DataFrame.
+package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather).
 
 As noted on the official feather homepage, the feather format is still considered "beta" and should not be relied on for
 long-term storage/productions needs.
@@ -160,7 +160,10 @@ end
 
 # DataStreams interface
 Data.reset!(io::Feather.Source) = nothing
-Data.isdone(io::Feather.Source, row, col) = col >= size(Data.schema(io), 2)
+function Data.isdone(io::Feather.Source, row, col)
+    rows, cols = size(Data.schema(io))
+    return col > cols && row > rows
+end
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Column}) = true
 
 function Data.getcolumn{T}(source::Source, ::Type{T}, i)
@@ -281,7 +284,7 @@ type Sink{I<:IO} <: Data.Sink
     metadata::String
 end
 
-function Sink(file::AbstractString ;description::AbstractString=String(""), metadata::AbstractString=String(""))
+function Sink(file::AbstractString; description::AbstractString=String(""), metadata::AbstractString=String(""))
     io = open(file, "w")
     Base.write(io, FEATHER_MAGIC_BYTES)
     return Sink(Data.EMPTYSCHEMA, Metadata.CTable("",0,Metadata.Column[],VERSION,""), io, description, metadata)
@@ -391,12 +394,12 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
 end
 
 "write a Julia DataFrame to a feather-formatted binary file"
-function write(file::AbstractString, df::DataFrame;description::AbstractString=String(""), metadata::AbstractString=String(""))
+function write(file::AbstractString, df::DataFrame; description::AbstractString=String(""), metadata::AbstractString=String(""))
     sink = Sink(file; description=description, metadata=metadata)
     return Data.stream!(df, sink)
 end
 
-function write(file::AbstractString, dfs::DataFrame...;uniontype="includeall", description::AbstractString=String(""), metadata::AbstractString=String(""))
+function write(file::AbstractString, dfs::DataFrame...; uniontype="includeall", description::AbstractString=String(""), metadata::AbstractString=String(""))
     sink = Sink(file; description=description, metadata=metadata)
     return Data.stream!(collect(dfs), sink; uniontype=uniontype)
 end

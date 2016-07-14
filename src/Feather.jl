@@ -94,15 +94,15 @@ const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
     Metadata.MICROSECOND => Arrow.Microsecond,
     Metadata.NANOSECOND => Arrow.Nanosecond
 )
-const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([v=>k for (k,v) in TimeUnit2julia])
+const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([(v, k) for (k,v) in TimeUnit2julia])
 
 """
 Given a `meta` and `Metadata.Type_`, returns the storage Julia type
 """
-function juliatype end
+function juliastoragetype end
 
-juliatype(meta::Void, values_type::Metadata.Type_, data) = Type_2julia[values_type]
-function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_, data)
+juliastoragetype(meta::Void, values_type::Metadata.Type_, data) = Type_2julia[values_type]
+function juliastoragetype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_, data)
     levelinfo = meta.levels
     len = levelinfo.length
     ptr = pointer(data) + levelinfo.offset
@@ -111,9 +111,13 @@ function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_,
     levels = tuple(map(x->Symbol(unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x])), 1:len)...)
     return Arrow.Category{meta.ordered,Type_2julia[values_type],levels}
 end
-juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.Type_, data) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
-juliatype(meta::Metadata.DateMetadata, values_type::Metadata.Type_, data) = Arrow.Date
-juliatype(meta::Metadata.TimeMetadata, values_type::Metadata.Type_, data) = Arrow.Time{TimeUnit2julia[meta.unit]}
+juliastoragetype(meta::Metadata.TimestampMetadata, values_type::Metadata.Type_, data) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
+juliastoragetype(meta::Metadata.DateMetadata, values_type::Metadata.Type_, data) = Arrow.Date
+juliastoragetype(meta::Metadata.TimeMetadata, values_type::Metadata.Type_, data) = Arrow.Time{TimeUnit2julia[meta.unit]}
+
+juliatype{T<:Arrow.Timestamp}(::Type{T}) = DateTime
+juliatype{T<:Arrow.Date}(::Type{T}) = Date
+juliatype{T}(::Type{T}) = T
 
 """
 `unwrap` creates a Julia array from a feather file; performing any necessary conversions
@@ -132,6 +136,8 @@ type Source <: Data.Source
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
+    feathertypes::Vector{DataType} # separate from the types in schema, since we need to convert between feather storage types & julia types
+    columns::Vector{Any} # holds references to pre-fetched columns for Data.getfield
 end
 
 # reading feather files
@@ -149,13 +155,15 @@ function Source(file::AbstractString)
     ctable = FlatBuffers.read(Metadata.CTable, m, metapos + rootpos - 1)
     header = String[]
     types = DataType[]
+    juliatypes = DataType[]
     columns = ctable.columns
     for col in columns
         push!(header, col.name)
-        push!(types, juliatype(col.metadata, col.values.type_, m))
+        push!(types, juliastoragetype(col.metadata, col.values.type_, m))
+        push!(juliatypes, juliatype(types[end]))
     end
     # construct Data.Schema and Feather.Source
-    return Source(Data.Schema(header, types, ctable.num_rows, Dict("parent"=>m)), ctable, m)
+    return Source(Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, Array{Any}(length(columns)))
 end
 
 # DataStreams interface
@@ -165,13 +173,21 @@ function Data.isdone(io::Feather.Source, row, col)
     return col > cols && row > rows
 end
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Column}) = true
+Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Field}) = true
+
+function Data.getfield{T}(source::Feather.Source, ::Type{T}, row, col)
+    if !isdefined(source.columns, col)
+        source.columns[col] = Data.getcolumn(source, T, col)
+    end
+    return source.columns[col][row]
+end
 
 function Data.getcolumn{T}(source::Source, ::Type{T}, i)
     rows = Int32(source.ctable.num_rows)
     columns = source.ctable.columns
-    types = source.schema.types
+    types = source.feathertypes
     m = source.data
-    parent = source.schema.metadata["parent"]
+    parent = source.data # schema.metadata["parent"]
     # create a corresponding Julia NullableVector for each feather array
     col = columns[i]
     typ = types[i]
@@ -293,14 +309,23 @@ end
 # DataStreams interface
 Data.streamtypes{T<:Feather.Sink}(::Type{T}) = [Data.Column]
 
-function Data.stream!(df, ::Type{Data.Column}, sink::Feather.Sink)
-    header = map(string, names(df))
-    data = df.columns
+function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink)
+    df = Data.stream!(source, DataFrame)
+    return Data.stream!(df, sink)
+end
+
+function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink)
+    sch = Data.schema(source)
+    header = Data.header(sch)
+    types = Data.types(sch)
+    # data = df.columns
     io = sink.io
     # write out arrays, building each array's metadata as we go
-    rows = length(data) > 0 ? length(data[1]) : 0
+    rows = size(sch, 1)
     columns = Metadata.Column[]
-    for (name,arr) in zip(header,data)
+    for (i, name) in enumerate(header)
+        @inbounds T = types[i]
+        arr = Data.getcolumn(source, T, i)
         total_bytes = 0
         offset = position(io)
         null_count = sum(arr.isnull)
@@ -313,8 +338,9 @@ function Data.stream!(df, ::Type{Data.Column}, sink::Feather.Sink)
         end
         # write out array values
         total_bytes += writecolumn(io, Int32[], true, arr)
-        values = Metadata.PrimitiveArray(feathertype(eltype(eltype(arr))), Metadata.PLAIN, offset, len, null_count, total_bytes)
-        push!(columns, Metadata.Column(String(name), values, getmetadata(io, eltype(eltype(arr))), String("")))
+        TT = eltype(eltype(arr))
+        values = Metadata.PrimitiveArray(feathertype(TT), Metadata.PLAIN, offset, len, null_count, total_bytes)
+        push!(columns, Metadata.Column(String(name), values, getmetadata(io, TT), String("")))
     end
     # write out metadata
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
@@ -326,23 +352,23 @@ function Data.stream!(df, ::Type{Data.Column}, sink::Feather.Sink)
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
     close(io)
-    sink.schema = Data.schema(df)
+    sink.schema = sch
     sink.ctable = ctable
     return sink
 end
 
 function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall")
     if isa(uniontype, DataFrame)
-        header = [a=>b for (a,b) in zip(Data.header(uniontype),Data.types(uniontype))]
+        header = [(a, b) for (a,b) in zip(Data.header(uniontype),Data.types(uniontype))]
     elseif uniontype == "includeall"
         header = Pair{String,DataType}[]
         for df in dfs
-            header = union(header, [a=>b for (a,b) in zip(Data.header(df),Data.types(df))])
+            header = union(header, [(a, b) for (a,b) in zip(Data.header(df),Data.types(df))])
         end
     elseif uniontype == "includematches"
-        header = [a=>b for (a,b) in zip(Data.header(dfs[1]),Data.types(dfs[1]))]
+        header = [(a, b) for (a,b) in zip(Data.header(dfs[1]),Data.types(dfs[1]))]
         for i = 2:length(dfs)
-            header = intersect(header, [a=>b for (a,b) in zip(Data.header(dfs[i]),Data.types(dfs[i]))])
+            header = intersect(header, [(a, b) for (a,b) in zip(Data.header(dfs[i]),Data.types(dfs[i]))])
         end
     end
     io = sink.io

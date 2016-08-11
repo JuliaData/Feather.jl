@@ -303,7 +303,7 @@ end
 function Sink(file::AbstractString; description::AbstractString=String(""), metadata::AbstractString=String(""))
     io = open(file, "w")
     Base.write(io, FEATHER_MAGIC_BYTES)
-    return Sink(Data.EMPTYSCHEMA, Metadata.CTable("",0,Metadata.Column[],VERSION,""), io, description, metadata)
+    return Sink(Data.EMPTYSCHEMA, Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), io, description, metadata)
 end
 
 # DataStreams interface

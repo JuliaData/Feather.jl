@@ -1,25 +1,55 @@
+
 # Feather
 
-[![0.4](http://pkg.julialang.org/badges/Feather_0.4.svg)](http://pkg.julialang.org/?pkg=Feather)
-[![0.5](http://pkg.julialang.org/badges/Feather_0.5.svg)](http://pkg.julialang.org/?pkg=Feather)
-[![Travis](https://travis-ci.org/JuliaStats/Feather.jl.svg?branch=master)](https://travis-ci.org/JuliaStats/Feather.jl)
-[![Coveralls](https://coveralls.io/repos/github/JuliaStats/Feather.jl/badge.svg?branch=master)](https://coveralls.io/github/JuliaStats/Feather.jl?branch=master)
+*Julia library for working with feather-formatted files*
 
-Package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather) and loading into a Julia DataFrame.
+| **Documentation**                                                               | **PackageEvaluator**                                            | **Build Status**                                                                                |
+|:-------------------------------------------------------------------------------:|:---------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
+| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][pkg-0.4-img]][pkg-0.4-url] [![][pkg-0.5-img]][pkg-0.5-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
 
-As noted on the official feather homepage, the feather format is still considered "beta" and should not be relied on for
-long-term storage/productions needs.
 
 ## Installation
+
+The package is registered in `METADATA.jl` and so can be installed with `Pkg.add`.
+
 ```julia
-Pkg.add("Feather")
+julia> Pkg.add("Feather")
 ```
 
-## Usage
+## Documentation
 
-Feather.jl provides two high-level methods for reading and writing feather files, respectively.
-```julia
-df = Feather.read("feather_file.feather")
+- [**STABLE**][docs-stable-url] &mdash; **most recently tagged version of the documentation.**
+- [**LATEST**][docs-latest-url] &mdash; *in-development version of the documentation.*
 
-Feather.write("output.feather", df)
-```
+## Project Status
+
+The package is tested against Julia `0.4` and *current* `0.5-dev` on Linux, OS X, and Windows.
+
+## Contributing and Questions
+
+Contributions are very welcome, as are feature requests and suggestions. Please open an
+[issue][issues-url] if you encounter any problems or would just like to ask a question.
+
+
+
+[docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
+[docs-latest-url]: https://JuliaStats.github.io/Feather.jl/latest
+
+[docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
+[docs-stable-url]: https://JuliaStats.github.io/Feather.jl/stable
+
+[travis-img]: https://travis-ci.org/JuliaStats/Feather.jl.svg?branch=master
+[travis-url]: https://travis-ci.org/JuliaStats/Feather.jl
+
+[appveyor-img]: https://ci.appveyor.com/api/projects/status/h227adt6ovd1u3sx/branch/master?svg=true
+[appveyor-url]: https://ci.appveyor.com/project/JuliaStats/documenter-jl/branch/master
+
+[codecov-img]: https://codecov.io/gh/JuliaStats/Feather.jl/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/JuliaStats/Feather.jl
+
+[issues-url]: https://github.com/JuliaStats/Feather.jl/issues
+
+[pkg-0.4-img]: http://pkg.julialang.org/badges/Feather_0.4.svg
+[pkg-0.4-url]: http://pkg.julialang.org/?pkg=Feather
+[pkg-0.5-img]: http://pkg.julialang.org/badges/Feather_0.5.svg
+[pkg-0.5-url]: http://pkg.julialang.org/?pkg=Feather

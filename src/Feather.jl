@@ -314,19 +314,19 @@ values(A::NullableVector) = A.values
 
 # Category
 function writecolumn{O,I,T}(io, ::Type{Arrow.Category{O,I,T}}, o, b, A)
-    return Base.write(io, Base.view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(I))))
+    return Base.write(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(I))))
 end
 # Date
 function writecolumn(io, ::Type{Date}, o, b, A)
-    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.date2unix, values(A))), 1:(length(A) * sizeof(Int32))))
+    return Base.write(io, view(reinterpret(UInt8, map(Arrow.date2unix, values(A))), 1:(length(A) * sizeof(Int32))))
 end
 # Timestamp
 function writecolumn(io, ::Type{DateTime}, o, b, A)
-    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.datetime2unix, values(A))), 1:(length(A) * sizeof(Int64))))
+    return Base.write(io, view(reinterpret(UInt8, map(Arrow.datetime2unix, values(A))), 1:(length(A) * sizeof(Int64))))
 end
 # Date, Timestamp, Time and other primitive T
 function writecolumn{T}(io, ::Type{T}, o, b, A)
-    return Base.write(io, Base.view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(T))))
+    return Base.write(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(T))))
 end
 # List types
 valuelength{T}(val::T) = length(val)
@@ -346,7 +346,7 @@ function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, offs
         offsets[ind + 1] = off
         ind += 1
     end
-    writeoffset && Base.write(io, Base.view(reinterpret(UInt8, offsets), 1:length(offsets) * sizeof(Int32)))
+    writeoffset && Base.write(io, view(reinterpret(UInt8, offsets), 1:length(offsets) * sizeof(Int32)))
     total_bytes += offsets[len+1]
     for val in arr
         writevalue(io, val)
@@ -362,7 +362,7 @@ function writenulls(io, A::NullableVector, null_count, len, total_bytes)
     if null_count > 0
         total_bytes += null_bytes = Feather.bytes_for_bits(len)
         bytes = BitArray(!A.isnull)
-        Base.write(io, Base.view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
+        Base.write(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes
 end
@@ -430,7 +430,7 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::B
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
     meta = FlatBuffers.build!(ctable)
     rng = (meta.head + 1):length(meta.bytes)
-    Base.write(io, Base.view(meta.bytes, rng))
+    Base.write(io, view(meta.bytes, rng))
     # write out metadata size
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes
@@ -480,7 +480,7 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
         null_count = sum(nulls)
         total_bytes = 0
         total_bytes += null_bytes = Feather.bytes_for_bits(rows)
-        Base.write(io, Base.view(reinterpret(UInt8, nulls.chunks), 1:null_bytes))
+        Base.write(io, view(reinterpret(UInt8, nulls.chunks), 1:null_bytes))
         if !isempty(offsets)
             total_bytes += Base.write(io, offsets)
         end
@@ -492,7 +492,7 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
     meta = FlatBuffers.build!(ctable)
     rng = (meta.head + 1):length(meta.bytes)
-    Base.write(io, Base.view(meta.bytes, rng))
+    Base.write(io, view(meta.bytes, rng))
     # write out metadata size
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes

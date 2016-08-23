@@ -1,10 +1,7 @@
 module Metadata
 
-if !isdefined(Core, :String)
-    typealias String UTF8String
-end
-
 using FlatBuffers
+using Compat: UTF8String
 
 @enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
   UINT8 = 5, UINT16 = 6, UINT32 = 7, UINT64 = 8,
@@ -35,7 +32,7 @@ end
 
 type TimestampMetadata
     unit::TimeUnit
-    timezone::String
+    timezone::UTF8String
 end
 
 type DateMetadata
@@ -48,23 +45,23 @@ end
 @union TypeMetadata Union{Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata}
 
 type Column
-    name::String
+    name::UTF8String
     values::PrimitiveArray
     metadata_type::Int8
     metadata::TypeMetadata
-    user_metadata::String
+    user_metadata::UTF8String
 end
 
-function Column(name::String, values::PrimitiveArray, metadata::TypeMetadata=nothing, user_metadata::String="")
+function Column(name::UTF8String, values::PrimitiveArray, metadata::TypeMetadata=nothing, user_metadata::UTF8String="")
     return Column(name, values, FlatBuffers.typeorder(TypeMetadata, typeof(metadata)), metadata, user_metadata)
 end
 
 type CTable
-    description::String
+    description::UTF8String
     num_rows::Int64
     columns::Vector{Column}
     version::Int32
-    metadata::String
+    metadata::UTF8String
 end
 
 end # module

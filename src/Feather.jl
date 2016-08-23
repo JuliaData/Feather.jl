@@ -1,3 +1,5 @@
+__precompile__()
+
 """
 package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather).
 
@@ -7,20 +9,9 @@ long-term storage/productions needs.
 """
 module Feather
 
-if !isdefined(Core, :String)
-    typealias String UTF8String
-end
-
-if !isdefined(Base, :view)
-    view = sub
-end
-
-if Base.VERSION < v"0.5.0-dev+4631"
-    unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
-    unsafe_string(ptr, len) = utf8(ptr, len)
-end
-
-using FlatBuffers, DataStreams, DataFrames, NullableArrays, WeakRefStrings
+using FlatBuffers, DataFrames, NullableArrays, WeakRefStrings
+using DataStreams: Data
+using Compat: UTF8String, view, unsafe_wrap, unsafe_string
 
 export Data, DataFrame
 
@@ -77,7 +68,7 @@ const julia2Type_ = Dict{DataType,Metadata.Type_}(
     UInt64  => Metadata.UINT64,
     Float32 => Metadata.FLOAT,
     Float64 => Metadata.DOUBLE,
-    String  => Metadata.UTF8,
+    UTF8String  => Metadata.UTF8,
     Vector{UInt8}   => Metadata.BINARY,
     DateTime   => Metadata.INT64,
     Date   => Metadata.INT32,
@@ -153,7 +144,7 @@ function Source(file::AbstractString)
     metapos = length(m) - (metalength + 7)
     rootpos = Base.read(IOBuffer(m[metapos:metapos+4]), Int32)
     ctable = FlatBuffers.read(Metadata.CTable, m, metapos + rootpos - 1)
-    header = String[]
+    header = UTF8String[]
     types = DataType[]
     juliatypes = DataType[]
     columns = ctable.columns
@@ -372,11 +363,11 @@ type Sink <: Data.Sink
     schema::Data.Schema
     ctable::Metadata.CTable
     io::IO
-    description::String
-    metadata::String
+    description::UTF8String
+    metadata::UTF8String
 end
 
-function Sink(file::Union{IO,AbstractString}; description::AbstractString=String(""), metadata::AbstractString=String(""))
+function Sink(file::Union{IO,AbstractString}; description::AbstractString="", metadata::AbstractString="")
     io = isa(file, AbstractString) ? open(file, "w") : file
     Base.write(io, FEATHER_MAGIC_BYTES)
     return Sink(Data.EMPTYSCHEMA, Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), io, description, metadata)
@@ -424,7 +415,7 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::B
         TT = eltype(arr) <: Nullable ? eltype(eltype(arr)) : eltype(arr)
         total_bytes += writecolumn(io, TT, Int32[], true, arr)
         values = Metadata.PrimitiveArray(feathertype(TT), Metadata.PLAIN, offset, len, null_count, total_bytes)
-        push!(columns, Metadata.Column(String(name), values, getmetadata(io, TT), String("")))
+        push!(columns, Metadata.Column(UTF8String(name), values, getmetadata(io, TT), ""))
     end
     # write out metadata
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
@@ -445,7 +436,7 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
     if isa(uniontype, DataFrame)
         header = [(a, b) for (a,b) in zip(Data.header(uniontype), Data.types(uniontype))]
     elseif uniontype == "includeall"
-        header = Pair{String,DataType}[]
+        header = Pair{UTF8String,DataType}[]
         for df in dfs
             header = union(header, [(a, b) for (a,b) in zip(Data.header(df), Data.types(df))])
         end
@@ -486,7 +477,7 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
         end
         total_bytes += Base.write(io, takebuf_array(buf))
         values = Metadata.PrimitiveArray(feathertype(T), Metadata.PLAIN, offset, rows, null_count, total_bytes)
-        push!(columns, Metadata.Column(String(name), values, getmetadata(io, T), String("")))
+        push!(columns, Metadata.Column(UTF8String(name), values, getmetadata(io, T), ""))
     end
     # write out metadata
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
@@ -498,7 +489,7 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
     flush(io)
-    sink.schema = Data.Schema(String[x[1] for x in header], DataType[x[2] for x in header], rows)
+    sink.schema = Data.Schema(UTF8String[x[1] for x in header], DataType[x[2] for x in header], rows)
     sink.ctable = ctable
     return sink
 end
@@ -522,7 +513,7 @@ Feather.write("sqlite_query_result.feather", SQLite.Source, "select * from cool_
 function write end
 
 function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; # append::Bool=false,
-                    description::AbstractString=String(""), metadata::AbstractString=String(""))
+                    description::AbstractString="", metadata::AbstractString="")
     source = T(args...)
     sink = Sink(io; description=description, metadata=metadata)
     Data.stream!(source, sink, false) # append)
@@ -530,7 +521,7 @@ function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; # append::Bo
     return sink
 end
 function write(io::Union{AbstractString,IO}, source; # append::Bool=false,
-                    description::AbstractString=String(""), metadata::AbstractString=String(""))
+                    description::AbstractString="", metadata::AbstractString="")
     sink = Sink(io; description=description, metadata=metadata)
     Data.stream!(source, sink, false) # append)
     close(sink)

@@ -1,3 +1,6 @@
 julia 0.4
-FlatBuffers
-DataStreams
+FlatBuffers 0.1.1
+NullableArrays
+DataFrames
+DataStreams 0.0.9
+WeakRefStrings 0.1.3

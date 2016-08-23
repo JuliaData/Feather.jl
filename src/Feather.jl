@@ -56,8 +56,8 @@ const Type_2julia = Dict{Metadata.Type_,DataType}(
     Metadata.UINT64    => UInt64,
     Metadata.FLOAT     => Float32,
     Metadata.DOUBLE    => Float64,
-    Metadata.UTF8      => WeakRefString{UInt8}, # List
-    Metadata.BINARY    => Vector{UInt8}, # List
+    Metadata.UTF8      => WeakRefString{UInt8},
+    Metadata.BINARY    => Vector{UInt8},
     Metadata.CATEGORY  => Int64,
     Metadata.TIMESTAMP => Int64,
     Metadata.DATE      => Int64,
@@ -65,7 +65,6 @@ const Type_2julia = Dict{Metadata.Type_,DataType}(
 )
 
 # "maps Julia types to Arrow/Feather type enum values"
-# const julia2Type_ = Dict{DataType,Metadata.Type_}([v=>k for (k,v) in Type_2julia])
 const julia2Type_ = Dict{DataType,Metadata.Type_}(
     Bool    => Metadata.BOOL,
     Int8    => Metadata.INT8,
@@ -78,14 +77,15 @@ const julia2Type_ = Dict{DataType,Metadata.Type_}(
     UInt64  => Metadata.UINT64,
     Float32 => Metadata.FLOAT,
     Float64 => Metadata.DOUBLE,
-    String  => Metadata.UTF8, # List
-    Vector{UInt8}   => Metadata.BINARY, # List
+    String  => Metadata.UTF8,
+    Vector{UInt8}   => Metadata.BINARY,
     DateTime   => Metadata.INT64,
     Date   => Metadata.INT32,
+    WeakRefString{UInt8} => Metadata.UTF8
 )
 
-const NON_PRIMITIVE_TYPES = Set(Metadata.Type_[Metadata.UTF8,Metadata.BINARY])
-"whether a Arrow/Feather type is primitive or not (i.e. not represented by a List{UInt8})"
+const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8,Metadata.BINARY])
+"whether an Arrow/Feather type is primitive or not (i.e. not represented by a List{UInt8})"
 isprimitive(x::Metadata.Type_) = x in NON_PRIMITIVE_TYPES ? false : true
 
 const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
@@ -120,7 +120,7 @@ juliatype{T<:Arrow.Date}(::Type{T}) = Date
 juliatype{T}(::Type{T}) = T
 
 """
-`unwrap` creates a Julia array from a feather file; performing any necessary conversions
+`unwrap` creates a Julia array from a feather file column; performing any necessary conversions
 """
 function unwrap end
 
@@ -160,7 +160,8 @@ function Source(file::AbstractString)
     for col in columns
         push!(header, col.name)
         push!(types, juliastoragetype(col.metadata, col.values.type_, m))
-        push!(juliatypes, juliatype(types[end]))
+        jl = juliatype(types[end])
+        push!(juliatypes, col.values.null_count == 0 ? jl : Nullable{jl})
     end
     # construct Data.Schema and Feather.Source
     return Source(Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, Array{Any}(length(columns)))
@@ -179,10 +180,35 @@ function Data.getfield{T}(source::Feather.Source, ::Type{T}, row, col)
     if !isdefined(source.columns, col)
         source.columns[col] = Data.getcolumn(source, T, col)
     end
-    return source.columns[col][row]
+    return Date.getfield(source.columns[col], T, row)
 end
 
 function Data.getcolumn{T}(source::Source, ::Type{T}, i)
+    rows = Int32(source.ctable.num_rows)
+    columns = source.ctable.columns
+    types = source.feathertypes
+    m = source.data
+    parent = source.data
+    # create a corresponding Julia Vector for the feather array
+    col = columns[i]
+    typ = types[i]
+    values = col.values
+    values.null_count > 0 && throw(NullException)
+    bitmask_bytes = 0
+    if Feather.isprimitive(values.type_)
+        # for primitive types, we can just "wrap" the feather pointer
+        column = Feather.unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows)
+    else
+        # for string types, we need to manually construct based on each elements length
+        ptr = pointer(m) + values.offset + bitmask_bytes
+        offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), rows+1)
+        values = unsafe_wrap(Array, ptr + sizeof(offsets), offsets[end])
+        arr = WeakRefString{UInt8}[WeakRefString(pointer(values,offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:rows]
+        column = [string(x) for x in arr]
+    end
+    return column
+end
+function Data.getcolumn{T}(source::Source, ::Type{Nullable{T}}, i)
     rows = Int32(source.ctable.num_rows)
     columns = source.ctable.columns
     types = source.feathertypes
@@ -212,14 +238,46 @@ function Data.getcolumn{T}(source::Source, ::Type{T}, i)
         ptr = pointer(m) + values.offset + bitmask_bytes
         offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), rows+1)
         values = unsafe_wrap(Array, ptr + sizeof(offsets), offsets[end])
-        arr = WeakRefString{UInt8}[WeakRefString(pointer(values,offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:rows]
+        arr = WeakRefString{UInt8}[WeakRefString(pointer(values, offsets[i] + 1), Int(offsets[i + 1] - offsets[i])) for i = 1:rows]
         column = NullableArray{WeakRefString{UInt8},1}(arr, nulls, parent)
     end
     return column
 end
 
-"read a feather-formatted binary file into a Julia DataFrame"
-read(file::AbstractString, sink=DataFrame) = Data.stream!(Source(file), sink)
+"""
+`Feather.read{T <: Data.Sink}(file, sink_type::Type{T}, sink_args...)` => `T`
+`Feather.read(file, sink::Data.Sink)` => `Data.Sink`
+
+`Feather.read` takes a feather-formatted binary `file` argument and "streams" the data to the
+provided `sink` argument. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
+or a Sink can be constructed "on the fly" by providing the type of Sink and any necessary positional arguments
+(the 1st method above). By default, a `DataFrame` is returned.
+
+Examples:
+
+```julia
+# default read method, returns a DataFrame
+df = Feather.read("cool_feather_file.feather")
+
+# read a feather file directly into a SQLite database table
+db = SQLite.DB()
+Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
+```
+"""
+function read end
+
+function read(file::AbstractString, sink=DataFrame, args...; append::Bool=false)
+    source = Source(file)
+    return Data.stream!(source, sink, append, args...)
+end
+
+function read{T}(file::AbstractString, sink::T; append::Bool=false)
+    source = Source(file)
+    return Data.stream!(source, sink, append)
+end
+
+read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false) = Data.stream!(source, sink, append, args...)
+read{T}(source::Feather.Source, sink::T; append::Bool=false) = Data.stream!(source, sink, append)
 
 # writing feather files
 "get the Arrow/Feather enum type from an AbstractColumn"
@@ -251,24 +309,32 @@ function getmetadata{O,I,T}(io, ::Type{Arrow.Category{O,I,T}})
     return Metadata.CategoryMetadata(Metadata.PrimitiveArray(julia2Type_[I], Metadata.PLAIN, offset, len, 0, total_bytes), O)
 end
 
+values(A::Vector) = A
+values(A::NullableVector) = A.values
+
 # Category
-function writecolumn{O,I,T}(io, o, b, A::AbstractVector{Nullable{Arrow.Category{O,I,T}}})
-    return Base.write(io, Base.view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(I))))
+function writecolumn{O,I,T}(io, ::Type{Arrow.Category{O,I,T}}, o, b, A)
+    return Base.write(io, Base.view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(I))))
 end
 # Date
-function writecolumn(io, o, b, A::AbstractVector{Nullable{Date}})
-    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.date2unix, A.values)), 1:(length(A) * sizeof(Int32))))
+function writecolumn(io, ::Type{Date}, o, b, A)
+    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.date2unix, values(A))), 1:(length(A) * sizeof(Int32))))
 end
 # Timestamp
-function writecolumn(io, o, b, A::AbstractVector{Nullable{DateTime}})
-    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.datetime2unix, A.values)), 1:(length(A) * sizeof(Int64))))
+function writecolumn(io, ::Type{DateTime}, o, b, A)
+    return Base.write(io, Base.view(reinterpret(UInt8, map(Arrow.datetime2unix, values(A))), 1:(length(A) * sizeof(Int64))))
 end
 # Date, Timestamp, Time and other primitive T
-function writecolumn{T}(io, o, b, A::AbstractVector{Nullable{T}})
-    return Base.write(io, Base.view(reinterpret(UInt8, A.values), 1:(length(A) * sizeof(T))))
+function writecolumn{T}(io, ::Type{T}, o, b, A)
+    return Base.write(io, Base.view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(T))))
 end
 # List types
-function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, offsets, writeoffset, arr::AbstractVector{Nullable{T}})
+valuelength{T}(val::T) = length(val)
+valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
+writevalue{T}(io, val::T) = Base.write(io, string(val).data)
+writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, string(val).data)
+
+function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, offsets, writeoffset, arr)
     len = length(arr)
     off = isempty(offsets) ? 0 : offsets[end]
     ind = isempty(offsets) ? 1 : length(offsets)
@@ -276,37 +342,60 @@ function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, offsets, writeo
     append!(offsets, zeros(Int32, isempty(offsets) ? len + 1 : len))
     offsets[1] = isempty(offsets) ? 0 : offsets[1]
     for v in arr
-        off += isnull(v) ? 0 : length(get(v))
+        off += valuelength(v)
         offsets[ind + 1] = off
         ind += 1
     end
     writeoffset && Base.write(io, Base.view(reinterpret(UInt8, offsets), 1:length(offsets) * sizeof(Int32)))
     total_bytes += offsets[len+1]
     for val in arr
-        isnull(val) && continue
-        # might be String, WeakRefString
-        v = convert(String, get(val))
-        Base.write(io, v.data)
+        writevalue(io, val)
+    end
+    return total_bytes
+end
+
+nullcount(A::NullableVector) = sum(A.isnull)
+nullcount(A::Vector) = 0
+writenulls(io, A::Vector, null_count, len, total_bytes) = return total_bytes
+function writenulls(io, A::NullableVector, null_count, len, total_bytes)
+    # write out null bitmask
+    if null_count > 0
+        total_bytes += null_bytes = Feather.bytes_for_bits(len)
+        bytes = BitArray(!A.isnull)
+        Base.write(io, Base.view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes
 end
 
 "DataStreams Sink implementation for feather-formatted binary files"
-type Sink{I<:IO} <: Data.Sink
+type Sink <: Data.Sink
     schema::Data.Schema
     ctable::Metadata.CTable
-    io::I
+    io::IO
     description::String
     metadata::String
 end
 
-function Sink(file::AbstractString; description::AbstractString=String(""), metadata::AbstractString=String(""))
-    io = open(file, "w")
+function Sink(file::Union{IO,AbstractString}; description::AbstractString=String(""), metadata::AbstractString=String(""))
+    io = isa(file, AbstractString) ? open(file, "w") : file
     Base.write(io, FEATHER_MAGIC_BYTES)
     return Sink(Data.EMPTYSCHEMA, Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), io, description, metadata)
 end
 
+Base.close(s::Sink) = (applicable(close, s.io) && close(s.io); return nothing)
+Base.flush(s::Sink) = (applicable(flush, s.io) && flush(s.io); return nothing)
+
 # DataStreams interface
+function Sink{T}(source, ::Type{T}, append::Bool, file::AbstractString)
+    sink = Sink(file)
+    # currently doesn't support appending to existing Sink
+    return sink
+end
+function Sink{T}(sink, source, ::Type{T}, append::Bool)
+    # currently doesn't support appending to existing Sink
+    return sink
+end
+
 Data.streamtypes{T<:Feather.Sink}(::Type{T}) = [Data.Column]
 
 function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink)
@@ -314,7 +403,7 @@ function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink)
     return Data.stream!(df, sink)
 end
 
-function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink)
+function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::Bool=false)
     sch = Data.schema(source)
     header = Data.header(sch)
     types = Data.types(sch)
@@ -328,17 +417,12 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink)
         arr = Data.getcolumn(source, T, i)
         total_bytes = 0
         offset = position(io)
-        null_count = sum(arr.isnull)
+        null_count = nullcount(arr)
         len = length(arr)
-        # write out null bitmask
-        if null_count > 0
-            total_bytes += null_bytes = Feather.bytes_for_bits(len)
-            bytes = BitArray(!arr.isnull)
-            Base.write(io, Base.view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
-        end
+        total_bytes = writenulls(io, arr, null_count, len, total_bytes)
         # write out array values
-        total_bytes += writecolumn(io, Int32[], true, arr)
-        TT = eltype(eltype(arr))
+        TT = eltype(arr) <: Nullable ? eltype(eltype(arr)) : eltype(arr)
+        total_bytes += writecolumn(io, TT, Int32[], true, arr)
         values = Metadata.PrimitiveArray(feathertype(TT), Metadata.PLAIN, offset, len, null_count, total_bytes)
         push!(columns, Metadata.Column(String(name), values, getmetadata(io, TT), String("")))
     end
@@ -351,7 +435,7 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink)
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
-    close(io)
+    flush(io)
     sink.schema = sch
     sink.ctable = ctable
     return sink
@@ -359,16 +443,16 @@ end
 
 function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall")
     if isa(uniontype, DataFrame)
-        header = [(a, b) for (a,b) in zip(Data.header(uniontype),Data.types(uniontype))]
+        header = [(a, b) for (a,b) in zip(Data.header(uniontype), Data.types(uniontype))]
     elseif uniontype == "includeall"
         header = Pair{String,DataType}[]
         for df in dfs
-            header = union(header, [(a, b) for (a,b) in zip(Data.header(df),Data.types(df))])
+            header = union(header, [(a, b) for (a,b) in zip(Data.header(df), Data.types(df))])
         end
     elseif uniontype == "includematches"
-        header = [(a, b) for (a,b) in zip(Data.header(dfs[1]),Data.types(dfs[1]))]
+        header = [(a, b) for (a,b) in zip(Data.header(dfs[1]), Data.types(dfs[1]))]
         for i = 2:length(dfs)
-            header = intersect(header, [(a, b) for (a,b) in zip(Data.header(dfs[i]),Data.types(dfs[i]))])
+            header = intersect(header, [(a, b) for (a,b) in zip(Data.header(dfs[i]), Data.types(dfs[i]))])
         end
     end
     io = sink.io
@@ -413,21 +497,47 @@ function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall"
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
-    close(io)
+    flush(io)
     sink.schema = Data.Schema(String[x[1] for x in header], DataType[x[2] for x in header], rows)
     sink.ctable = ctable
     return sink
 end
 
-"write a Julia DataFrame to a feather-formatted binary file"
-function write(file::AbstractString, df::DataFrame; description::AbstractString=String(""), metadata::AbstractString=String(""))
-    sink = Sink(file; description=description, metadata=metadata)
-    return Data.stream!(df, sink)
+"""
+`Feather.write{T <: Data.Source}(io, source::Type{T}, source_args...)` => `Feather.Sink`
+`Feather.write(io, source::Data.Source)` => `Feather.Sink`
+
+Write a `Data.Source` out to disk as a feather-formatted binary file. The two methods allow the passing of a
+fully constructed `Data.Source` (2nd method), or the type of Source and any necessary positional arguments (1st method).
+
+Examples:
+
+```julia
+df = DataFrame(...)
+Feather.write("shiny_new_feather_file.feather", df)
+
+Feather.write("sqlite_query_result.feather", SQLite.Source, "select * from cool_table")
+```
+"""
+function write end
+
+function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; # append::Bool=false,
+                    description::AbstractString=String(""), metadata::AbstractString=String(""))
+    source = T(args...)
+    sink = Sink(io; description=description, metadata=metadata)
+    Data.stream!(source, sink, false) # append)
+    close(sink)
+    return sink
+end
+function write(io::Union{AbstractString,IO}, source; # append::Bool=false,
+                    description::AbstractString=String(""), metadata::AbstractString=String(""))
+    sink = Sink(io; description=description, metadata=metadata)
+    Data.stream!(source, sink, false) # append)
+    close(sink)
+    return sink
 end
 
-function write(file::AbstractString, dfs::DataFrame...; uniontype="includeall", description::AbstractString=String(""), metadata::AbstractString=String(""))
-    sink = Sink(file; description=description, metadata=metadata)
-    return Data.stream!(collect(dfs), sink; uniontype=uniontype)
-end
+write{T}(sink::Sink, ::Type{T}, args...; append::Bool=false) = Data.stream!(T(args...), sink, append)
+write(sink::Sink, source; append::Bool=false) = Data.stream!(source, sink, append)
 
 end # module

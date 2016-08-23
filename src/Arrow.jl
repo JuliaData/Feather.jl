@@ -60,46 +60,4 @@ immutable Time{P}
     value::Int64
 end
 
-# Arrow column/array definitions
-const UINT8NULL = UInt8[]
-
-abstract AbstractColumn{T} <: AbstractVector{T}
-
-immutable Column{T} <: AbstractColumn{T}
-    buffer::Vector{UInt8} # potential reference to mmap
-    length::Int32
-    null_count::Int32
-    nulls::BitVector # null == 0 == false, not-null == 1 == true; always padded to 64-byte alignments
-    values::Vector{T} # always padded to 64-byte alignments
-end
-
-immutable List{A,T} <: AbstractColumn{T}
-    buffer::Vector{UInt8}
-    length::Int32
-    null_count::Int32
-    nulls::BitVector
-    offsets::Vector{Int32}
-    values::Union{Vector{T},List{T}}
-end
-
-Base.summary{O,I,T}(::Column{Category{O,I,T}}) = "Arrow.Category{ordered=$(O),$(I)}"
-# StructColumn
-
-# DenseUnionColumn
-
-# SparseUnionColumn
-
-# AbstractVector interface
-Base.size(A::AbstractColumn) = (Int(A.length),)
-Base.linearindexing{T<:AbstractColumn}(::Type{T}) = Base.LinearFast()
-
-Base.getindex{T}(A::Column{T}, i::Int) = A.nulls[i] ? Nullable{T}(A.values[i]) : Nullable{T}()
-Base.setindex!(A::Column, v, i::Int) = (setindex!(A.values, v, i); return A)
-
-Base.getindex{TT,T<:UInt8}(A::List{TT,T}, i::Int) = A.nulls[i] ?
-    Nullable{String}(String(pointer(A.values) + A.offsets[i], A.offsets[i+1] - A.offsets[i])) : Nullable{String}()
-
-#TODO:
- # make sure List{List{UInt8}} is viable
-
 end # module

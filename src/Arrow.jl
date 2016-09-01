@@ -1,17 +1,5 @@
 module Arrow
 
-# Core type definitions for Arrow format that don't currently exist in julia proper
-# Category type
- # `O` is a Bool indicating whether the categories are ordered
- # `I` is the size of internal storage
- # `T` is a Tuple containing the levels a symbols
-immutable Category{O,I,T}
-    value::I
-end
-
-Base.show{O,I,T}(io::IO, ::Type{Category{O,I,T}}) = print(io, "Arrow.Category{ordered=$(O),$(I)}")
-Base.show{O,I,T}(io::IO, x::Category{O,I,T}) = print(io, "$(T[x.value+1])")
-
 # Time types
 immutable Second end
 immutable Millisecond end

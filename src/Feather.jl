@@ -1,37 +1,28 @@
-"""
-package for reading/writing [feather-formatted binary files](https://github.com/wesm/feather).
-
-As noted on the official feather homepage, the feather format is still considered "beta" and should not be relied on for
-long-term storage/productions needs.
-
-"""
 module Feather
 
 if !isdefined(Core, :String)
     typealias String UTF8String
 end
-
 if !isdefined(Base, :view)
     view = sub
 end
-
 if Base.VERSION < v"0.5.0-dev+4631"
     unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
     unsafe_string(ptr, len) = utf8(ptr, len)
 end
 
-using FlatBuffers, DataStreams, DataFrames, NullableArrays, WeakRefStrings
+using FlatBuffers, DataStreams, DataFrames, NullableArrays, CategoricalArrays, WeakRefStrings
 
 export Data, DataFrame
 
 # sync with feather
 const VERSION = 1
 
-# flatbuffer defintions
-include("metadata.jl")
-
 # Arrow type definitions
 include("Arrow.jl")
+
+# flatbuffer defintions
+include("metadata.jl")
 
 # wesm/feather/cpp/src/common.h
 const FEATHER_MAGIC_BYTES = "FEA1".data
@@ -41,102 +32,64 @@ bytes_for_bits(size) = div(((size + 7) & ~7), 8)
 const BITMASK = UInt8[1, 2, 4, 8, 16, 32, 64, 128]
 getbit(byte::UInt8, i) = (byte & BITMASK[i]) == 0
 
-# wesm/feather/cpp/src/metadata_generated.h
-# wesm/feather/cpp/src/types.h
-"maps our Arrow/Feather types enum to final Arrow Julia eltypes"
-const Type_2julia = Dict{Metadata.Type_,DataType}(
-    Metadata.BOOL      => Bool,
-    Metadata.INT8      => Int8,
-    Metadata.INT16     => Int16,
-    Metadata.INT32     => Int32,
-    Metadata.INT64     => Int64,
-    Metadata.UINT8     => UInt8,
-    Metadata.UINT16    => UInt16,
-    Metadata.UINT32    => UInt32,
-    Metadata.UINT64    => UInt64,
-    Metadata.FLOAT     => Float32,
-    Metadata.DOUBLE    => Float64,
-    Metadata.UTF8      => WeakRefString{UInt8},
-    Metadata.BINARY    => Vector{UInt8},
-    Metadata.CATEGORY  => Int64,
-    Metadata.TIMESTAMP => Int64,
-    Metadata.DATE      => Int64,
-    Metadata.TIME      => Int64
-)
-
-# "maps Julia types to Arrow/Feather type enum values"
-const julia2Type_ = Dict{DataType,Metadata.Type_}(
-    Bool    => Metadata.BOOL,
-    Int8    => Metadata.INT8,
-    Int16   => Metadata.INT16,
-    Int32   => Metadata.INT32,
-    Int64   => Metadata.INT64,
-    UInt8   => Metadata.UINT8,
-    UInt16  => Metadata.UINT16,
-    UInt32  => Metadata.UINT32,
-    UInt64  => Metadata.UINT64,
-    Float32 => Metadata.FLOAT,
-    Float64 => Metadata.DOUBLE,
-    String  => Metadata.UTF8,
-    Vector{UInt8}   => Metadata.BINARY,
-    DateTime   => Metadata.INT64,
-    Date   => Metadata.INT32,
-    WeakRefString{UInt8} => Metadata.UTF8
-)
-
-const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8,Metadata.BINARY])
-"whether an Arrow/Feather type is primitive or not (i.e. not represented by a List{UInt8})"
-isprimitive(x::Metadata.Type_) = x in NON_PRIMITIVE_TYPES ? false : true
-
-const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
-    Metadata.SECOND => Arrow.Second,
-    Metadata.MILLISECOND => Arrow.Millisecond,
-    Metadata.MICROSECOND => Arrow.Microsecond,
-    Metadata.NANOSECOND => Arrow.Nanosecond
-)
-const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([(v, k) for (k,v) in TimeUnit2julia])
-
-"""
-Given a `meta` and `Metadata.Type_`, returns the storage Julia type
-"""
-function juliastoragetype end
-
-juliastoragetype(meta::Void, values_type::Metadata.Type_, data) = Type_2julia[values_type]
-function juliastoragetype(meta::Metadata.CategoryMetadata, values_type::Metadata.Type_, data)
-    levelinfo = meta.levels
-    len = levelinfo.length
-    ptr = pointer(data) + levelinfo.offset
-    offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), len+1)
-    ptr += sizeof(offsets)
-    levels = tuple(map(x->Symbol(unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x])), 1:len)...)
-    return Arrow.Category{meta.ordered,Type_2julia[values_type],levels}
+juliastoragetype(meta::Void, values_type) = Type_2julia[values_type]
+function juliastoragetype(meta::Metadata.CategoryMetadata, values_type)
+    R = Type_2julia[values_type]
+    return meta.ordered ? OrdinalValue{String,R} : NominalValue{String,R}
 end
-juliastoragetype(meta::Metadata.TimestampMetadata, values_type::Metadata.Type_, data) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
-juliastoragetype(meta::Metadata.DateMetadata, values_type::Metadata.Type_, data) = Arrow.Date
-juliastoragetype(meta::Metadata.TimeMetadata, values_type::Metadata.Type_, data) = Arrow.Time{TimeUnit2julia[meta.unit]}
+juliastoragetype(meta::Metadata.TimestampMetadata, values_type) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
+juliastoragetype(meta::Metadata.DateMetadata, values_type) = Arrow.Date
+juliastoragetype(meta::Metadata.TimeMetadata, values_type) = Arrow.Time{TimeUnit2julia[meta.unit]}
 
 juliatype{T<:Arrow.Timestamp}(::Type{T}) = DateTime
 juliatype{T<:Arrow.Date}(::Type{T}) = Date
 juliatype{T}(::Type{T}) = T
 
-"""
-`unwrap` creates a Julia array from a feather file column; performing any necessary conversions
-"""
-function unwrap end
+# get an array from a pointer, performing any necessary transformation from feather => julia
+unwrap(ptr, rows, copy) = (A = unsafe_wrap(Array, ptr, rows); return copy ? [x for x in A] : A)
+unwrap{T<:Arrow.Date}(ptr::Ptr{T}, rows, copy) = map(x->Arrow.unix2date(x), unsafe_wrap(Array, ptr, rows))
+unwrap{P,Z}(ptr::Ptr{Arrow.Timestamp{P,Z}}, rows, copy) = map(x->Arrow.unix2datetime(P, x), unsafe_wrap(Array, ptr, rows))
+unwrap{R}(ptr::Union{Ptr{NominalValue{String,R}},Ptr{OrdinalValue{String,R}}}, rows, copy) = map(x->x + R(1), unsafe_wrap(Array, convert(Ptr{R}, ptr), rows))
 
-unwrap(ptr, rows) = unsafe_wrap(Array, ptr, rows)
-unwrap{T<:Arrow.Date}(ptr::Ptr{T}, rows) = map(x->Arrow.unix2date(x), unsafe_wrap(Array, ptr, rows))
-unwrap{P,Z}(ptr::Ptr{Arrow.Timestamp{P,Z}}, rows) = map(x->Arrow.unix2datetime(P, x), unsafe_wrap(Array, ptr, rows))
+addlevels!{T}(::Type{T}, levels, i, meta, values_type, data) = return
+function addlevels!{T <: CategoricalArrays.CategoricalValue}(::Type{T}, catlevels, i, meta, values_type, data)
+    ptr = pointer(data) + meta.levels.offset
+    offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), meta.levels.length + 1)
+    ptr += sizeof(offsets)
+    catlevels[i] = map(x->unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x]), 1:meta.levels.length)
+    return
+end
+
+function factorize!{R}(::Type{NominalValue{String,R}}, ptr, rows, levels, bools)
+    refs = unwrap(ptr, rows, true)
+    pool = NominalPool{String, R}(levels)
+    return NominalArray{String,1,R}(refs, pool)
+end
+function factorize!{R}(::Type{OrdinalValue{String,R}}, ptr, rows, levels, bools)
+    refs = unwrap(ptr, rows, true)
+    pool = OrdinalPool{String, R}(levels)
+    return OrdinalArray{String,1,R}(refs, pool)
+end
+function factorize!{R}(::Type{Nullable{NominalValue{String,R}}}, ptr, rows, levels, bools)
+    refs = unwrap(ptr, rows, true)
+    refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:rows]
+    pool = NominalPool{String, R}(levels)
+    return NullableNominalArray{String,1,R}(refs, pool)
+end
+function factorize!{R}(::Type{Nullable{OrdinalValue{String,R}}}, ptr, rows, levels, bools)
+    refs = unwrap(ptr, rows, true)
+    refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:rows]
+    pool = OrdinalPool{String, R}(levels)
+    return NullableOrdinalArray{String,1,R}(refs, pool)
+end
 
 # DataStreams interface types
-"""
-A `Feather.Source` implements the `DataStreams` interface for a feather-formatted binary file.
-"""
 type Source <: Data.Source
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
     feathertypes::Vector{DataType} # separate from the types in schema, since we need to convert between feather storage types & julia types
+    levels::Dict{Int,Vector{String}}
     columns::Vector{Any} # holds references to pre-fetched columns for Data.getfield
 end
 
@@ -157,18 +110,19 @@ function Source(file::AbstractString)
     types = DataType[]
     juliatypes = DataType[]
     columns = ctable.columns
-    for col in columns
+    levels = Dict{Int,Vector{String}}()
+    for (i, col) in enumerate(columns)
         push!(header, col.name)
-        push!(types, juliastoragetype(col.metadata, col.values.type_, m))
+        push!(types, juliastoragetype(col.metadata, col.values.type_))
         jl = juliatype(types[end])
+        addlevels!(jl, levels, i, col.metadata, col.values.type_, m)
         push!(juliatypes, col.values.null_count == 0 ? jl : Nullable{jl})
     end
     # construct Data.Schema and Feather.Source
-    return Source(Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, Array{Any}(length(columns)))
+    return Source(Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, levels, Array{Any}(length(columns)))
 end
 
 # DataStreams interface
-Data.reset!(io::Feather.Source) = nothing
 function Data.isdone(io::Feather.Source, row, col)
     rows, cols = size(Data.schema(io))
     return col > cols && row > rows
@@ -180,24 +134,23 @@ function Data.getfield{T}(source::Feather.Source, ::Type{T}, row, col)
     if !isdefined(source.columns, col)
         source.columns[col] = Data.getcolumn(source, T, col)
     end
-    return Date.getfield(source.columns[col], T, row)
+    return source.columns[col][row]
 end
 
 function Data.getcolumn{T}(source::Source, ::Type{T}, i)
     rows = Int32(source.ctable.num_rows)
-    columns = source.ctable.columns
-    types = source.feathertypes
     m = source.data
-    parent = source.data
     # create a corresponding Julia Vector for the feather array
-    col = columns[i]
-    typ = types[i]
+    col = source.ctable.columns[i]
     values = col.values
+    typ = source.feathertypes[i]
     values.null_count > 0 && throw(NullException)
     bitmask_bytes = 0
-    if Feather.isprimitive(values.type_)
+    if T <: CategoricalArrays.CategoricalValue
+        column = Feather.factorize!(T, convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows, source.levels[i], Bool[])
+    elseif Feather.isprimitive(values.type_)
         # for primitive types, we can just "wrap" the feather pointer
-        column = Feather.unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows)
+        column = Feather.unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows, true)
     else
         # for string types, we need to manually construct based on each elements length
         ptr = pointer(m) + values.offset + bitmask_bytes
@@ -210,13 +163,10 @@ function Data.getcolumn{T}(source::Source, ::Type{T}, i)
 end
 function Data.getcolumn{T}(source::Source, ::Type{Nullable{T}}, i)
     rows = Int32(source.ctable.num_rows)
-    columns = source.ctable.columns
-    types = source.feathertypes
     m = source.data
-    parent = source.data # schema.metadata["parent"]
-    # create a corresponding Julia NullableVector for each feather array
-    col = columns[i]
-    typ = types[i]
+    # create a corresponding Julia NullableVector for the feather array
+    col = source.ctable.columns[i]
+    typ = source.feathertypes[i]
     values = col.values
     if values.null_count > 0
         # read feather null bitarray
@@ -229,10 +179,12 @@ function Data.getcolumn{T}(source::Source, ::Type{Nullable{T}}, i)
         bitmask_bytes = 0
         nulls = zeros(Bool, rows)
     end
-    if Feather.isprimitive(values.type_)
+    if T <: CategoricalArrays.CategoricalValue
+        column = Feather.factorize!(Nullable{T}, convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows, source.levels[i], nulls)
+    elseif Feather.isprimitive(values.type_)
         # for primitive types, we can just "wrap" the feather pointer
-        arr = Feather.unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows)
-        column = NullableArray{eltype(arr),1}(arr, nulls, parent)
+        arr = Feather.unwrap(convert(Ptr{typ}, pointer(m) + values.offset + bitmask_bytes), rows, false)
+        column = NullableArray{eltype(arr),1}(arr, nulls, m)
     else
         # for string types, we need to manually construct based on each elements length
         ptr = pointer(m) + values.offset + bitmask_bytes
@@ -280,41 +232,39 @@ read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false) = Data
 read{T}(source::Feather.Source, sink::T; append::Bool=false) = Data.stream!(source, sink, append)
 
 # writing feather files
-"get the Arrow/Feather enum type from an AbstractColumn"
-function feathertype end
-
 feathertype{T}(::Type{T}) = Feather.julia2Type_[T]
-feathertype{O,I,T}(::Type{Arrow.Category{O,I,T}}) = julia2Type_[I]
+feathertype{S,R}(::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}) = julia2Type_[R]
 feathertype{P}(::Type{Arrow.Time{P}}) = Metadata.INT64
 feathertype(::Type{Date}) = Metadata.INT32
 feathertype(::Type{DateTime}) = Metadata.INT64
 feathertype{T<:AbstractString}(::Type{T}) = Metadata.UTF8
 
-getmetadata{T}(io, ::Type{T}) = nothing
-getmetadata(io, ::Type{Date}) = Metadata.DateMetadata()
-getmetadata{T}(io, ::Type{Arrow.Time{T}}) = Metadata.TimeMetadata(julia2TimeUnit[T])
-getmetadata(io, ::Type{DateTime}) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
-function getmetadata{O,I,T}(io, ::Type{Arrow.Category{O,I,T}})
-    len = length(T)
+getmetadata{T}(io, ::Type{T}, A) = nothing
+getmetadata(io, ::Type{Date}, A) = Metadata.DateMetadata()
+getmetadata{T}(io, ::Type{Arrow.Time{T}}, A) = Metadata.TimeMetadata(julia2TimeUnit[T])
+getmetadata(io, ::Type{DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
+function getmetadata{S,R}(io, T::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}, A)
+    lvls = CategoricalArrays.levels(A)
+    len = length(lvls)
     offsets = zeros(Int32, len+1)
-    values = map(string, T)
     offsets[1] = off = 0
-    for (i,v) in enumerate(values)
+    for (i,v) in enumerate(lvls)
         off += length(v)
         offsets[i + 1] = off
     end
     offset = position(io)
     total_bytes = Base.write(io, view(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
-    total_bytes += Base.write(io, collect(values))
-    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(julia2Type_[I], Metadata.PLAIN, offset, len, 0, total_bytes), O)
+    total_bytes += Base.write(io, lvls)
+    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(julia2Type_[R], Metadata.PLAIN, offset, len, 0, total_bytes), T <: OrdinalValue)
 end
 
 values(A::Vector) = A
 values(A::NullableVector) = A.values
+values{S,R}(A::Union{NominalArray{S,1,R},OrdinalArray{S,1,R},NullableNominalArray{S,1,R},NullableOrdinalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
 
 # Category
-function writecolumn{O,I,T}(io, ::Type{Arrow.Category{O,I,T}}, o, b, A)
-    return Base.write(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(I))))
+function writecolumn{S,R}(io, ::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}, o, b, A)
+    return Base.write(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date
 function writecolumn(io, ::Type{Date}, o, b, A)
@@ -329,10 +279,11 @@ function writecolumn{T}(io, ::Type{T}, o, b, A)
     return Base.write(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(T))))
 end
 # List types
-valuelength{T}(val::T) = length(val)
+valuelength{T}(val::T) = length(String(val))
 valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
-writevalue{T}(io, val::T) = Base.write(io, string(val).data)
-writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, string(val).data)
+
+writevalue{T}(io, val::T) = Base.write(io, String(val).data)
+writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, String(get(val)).data)
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, offsets, writeoffset, arr)
     len = length(arr)
@@ -354,14 +305,21 @@ function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, offs
     return total_bytes
 end
 
-nullcount(A::NullableVector) = sum(A.isnull)
-nullcount(A::Vector) = 0
-writenulls(io, A::Vector, null_count, len, total_bytes) = return total_bytes
+writenulls(io, A, null_count, len, total_bytes) = return total_bytes
 function writenulls(io, A::NullableVector, null_count, len, total_bytes)
     # write out null bitmask
     if null_count > 0
         total_bytes += null_bytes = Feather.bytes_for_bits(len)
         bytes = BitArray(!A.isnull)
+        Base.write(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
+    end
+    return total_bytes
+end
+function writenulls{T <: Union{NullableNominalArray,NullableOrdinalArray}}(io, A::T, null_count, len, total_bytes)
+    # write out null bitmask
+    if null_count > 0
+        total_bytes += null_bytes = Feather.bytes_for_bits(len)
+        bytes = BitArray(!(A.refs .== 0))
         Base.write(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes
@@ -417,14 +375,14 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::B
         arr = Data.getcolumn(source, T, i)
         total_bytes = 0
         offset = position(io)
-        null_count = nullcount(arr)
+        null_count = Data.nullcount(arr)
         len = length(arr)
         total_bytes = writenulls(io, arr, null_count, len, total_bytes)
         # write out array values
         TT = eltype(arr) <: Nullable ? eltype(eltype(arr)) : eltype(arr)
         total_bytes += writecolumn(io, TT, Int32[], true, arr)
         values = Metadata.PrimitiveArray(feathertype(TT), Metadata.PLAIN, offset, len, null_count, total_bytes)
-        push!(columns, Metadata.Column(String(name), values, getmetadata(io, TT), String("")))
+        push!(columns, Metadata.Column(String(name), values, getmetadata(io, TT, arr), String("")))
     end
     # write out metadata
     ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
@@ -437,68 +395,6 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::B
     Base.write(io, FEATHER_MAGIC_BYTES)
     flush(io)
     sink.schema = sch
-    sink.ctable = ctable
-    return sink
-end
-
-function Data.stream!(dfs::Vector{DataFrame}, sink::Sink; uniontype="includeall")
-    if isa(uniontype, DataFrame)
-        header = [(a, b) for (a,b) in zip(Data.header(uniontype), Data.types(uniontype))]
-    elseif uniontype == "includeall"
-        header = Pair{String,DataType}[]
-        for df in dfs
-            header = union(header, [(a, b) for (a,b) in zip(Data.header(df), Data.types(df))])
-        end
-    elseif uniontype == "includematches"
-        header = [(a, b) for (a,b) in zip(Data.header(dfs[1]), Data.types(dfs[1]))]
-        for i = 2:length(dfs)
-            header = intersect(header, [(a, b) for (a,b) in zip(Data.header(dfs[i]), Data.types(dfs[i]))])
-        end
-    end
-    io = sink.io
-    # write out arrays, building each array's metadata as we go
-    columns = Feather.Metadata.Column[]
-    rows = 0
-    for (name,T) in header
-        offset = position(io)
-        nulls = BitVector()
-        offsets = Int32[]
-        buf = IOBuffer()
-        rows = 0
-        for df in dfs
-            rows += size(df, 1)
-            if haskey(df, Symbol(name))
-                arr = df[Symbol(name)]
-                append!(nulls, BitArray(!arr.isnull))
-                Feather.writecolumn(buf, offsets, false, arr)
-            else
-                len = size(df, 1)
-                append!(nulls, falses(len))
-                Feather.writecolumn(buf, offsets, false, NullableArray(T, len))
-            end
-        end
-        null_count = sum(nulls)
-        total_bytes = 0
-        total_bytes += null_bytes = Feather.bytes_for_bits(rows)
-        Base.write(io, view(reinterpret(UInt8, nulls.chunks), 1:null_bytes))
-        if !isempty(offsets)
-            total_bytes += Base.write(io, offsets)
-        end
-        total_bytes += Base.write(io, takebuf_array(buf))
-        values = Metadata.PrimitiveArray(feathertype(T), Metadata.PLAIN, offset, rows, null_count, total_bytes)
-        push!(columns, Metadata.Column(String(name), values, getmetadata(io, T), String("")))
-    end
-    # write out metadata
-    ctable = Metadata.CTable(sink.description, rows, columns, VERSION, sink.metadata)
-    meta = FlatBuffers.build!(ctable)
-    rng = (meta.head + 1):length(meta.bytes)
-    Base.write(io, view(meta.bytes, rng))
-    # write out metadata size
-    Base.write(io, Int32(length(rng)))
-    # write out final magic bytes
-    Base.write(io, FEATHER_MAGIC_BYTES)
-    flush(io)
-    sink.schema = Data.Schema(String[x[1] for x in header], DataType[x[2] for x in header], rows)
     sink.ctable = ctable
     return sink
 end

@@ -68,3 +68,55 @@ type CTable
 end
 
 end # module
+
+# wesm/feather/cpp/src/metadata_generated.h
+# wesm/feather/cpp/src/types.h
+const Type_2julia = Dict{Metadata.Type_,DataType}(
+    Metadata.BOOL      => Bool,
+    Metadata.INT8      => Int8,
+    Metadata.INT16     => Int16,
+    Metadata.INT32     => Int32,
+    Metadata.INT64     => Int64,
+    Metadata.UINT8     => UInt8,
+    Metadata.UINT16    => UInt16,
+    Metadata.UINT32    => UInt32,
+    Metadata.UINT64    => UInt64,
+    Metadata.FLOAT     => Float32,
+    Metadata.DOUBLE    => Float64,
+    Metadata.UTF8      => WeakRefString{UInt8},
+    Metadata.BINARY    => Vector{UInt8},
+    Metadata.CATEGORY  => Int64,
+    Metadata.TIMESTAMP => Int64,
+    Metadata.DATE      => Int64,
+    Metadata.TIME      => Int64
+)
+
+const julia2Type_ = Dict{DataType,Metadata.Type_}(
+    Bool    => Metadata.BOOL,
+    Int8    => Metadata.INT8,
+    Int16   => Metadata.INT16,
+    Int32   => Metadata.INT32,
+    Int64   => Metadata.INT64,
+    UInt8   => Metadata.UINT8,
+    UInt16  => Metadata.UINT16,
+    UInt32  => Metadata.UINT32,
+    UInt64  => Metadata.UINT64,
+    Float32 => Metadata.FLOAT,
+    Float64 => Metadata.DOUBLE,
+    String  => Metadata.UTF8,
+    Vector{UInt8}   => Metadata.BINARY,
+    DateTime   => Metadata.INT64,
+    Date   => Metadata.INT32,
+    WeakRefString{UInt8} => Metadata.UTF8
+)
+
+const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8, Metadata.BINARY])
+isprimitive(x::Metadata.Type_) = x in NON_PRIMITIVE_TYPES ? false : true
+
+const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
+    Metadata.SECOND => Arrow.Second,
+    Metadata.MILLISECOND => Arrow.Millisecond,
+    Metadata.MICROSECOND => Arrow.Microsecond,
+    Metadata.NANOSECOND => Arrow.Nanosecond
+)
+const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([(v, k) for (k,v) in TimeUnit2julia])

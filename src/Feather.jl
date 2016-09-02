@@ -125,7 +125,7 @@ end
 # DataStreams interface
 function Data.isdone(io::Feather.Source, row, col)
     rows, cols = size(Data.schema(io))
-    return col > cols && row > rows
+    return col > cols || row > rows
 end
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Column}) = true
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Field}) = true

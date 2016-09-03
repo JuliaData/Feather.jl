@@ -125,7 +125,7 @@ end
 # DataStreams interface
 function Data.isdone(io::Feather.Source, row, col)
     rows, cols = size(Data.schema(io))
-    return col > cols && row > rows
+    return col > cols || row > rows
 end
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Column}) = true
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Field}) = true
@@ -354,9 +354,9 @@ function Sink{T}(sink, source, ::Type{T}, append::Bool)
     return sink
 end
 
-Data.streamtypes{T<:Feather.Sink}(::Type{T}) = [Data.Column]
+Data.streamtypes{T<:Feather.Sink}(::Type{T}) = [Data.Column, Data.Field]
 
-function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink)
+function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink, append::Bool=false)
     df = Data.stream!(source, DataFrame)
     return Data.stream!(df, sink)
 end

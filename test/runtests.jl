@@ -7,6 +7,8 @@ files = map(x -> joinpath(testdir, x), readdir(testdir))
 
 testnull{T}(v1::T, v2::T) = v1 == v2
 testnull{T}(v1::Nullable{T}, v2::Nullable{T}) = (isnull(v1) && isnull(v2)) || (!isnull(v1) && !isnull(v2) && get(v1) == get(v2))
+testnull{T}(v1::T, v2::Nullable{T}) = !isnull(v2) && get(v2) == v1
+testnull{T}(v1::Nullable{T}, v2::T) = !isnull(v1) && get(v1) == v2
 
 for f in files
     source = Feather.Source(f)

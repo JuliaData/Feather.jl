@@ -9,6 +9,12 @@ julia:
   - 0.5
   - nightly
 
+python:
+  - "3.5"
+
+install:
+  - "pip install feather-format"
+  
 notifications:
   email: false
 

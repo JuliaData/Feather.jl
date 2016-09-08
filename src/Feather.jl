@@ -54,12 +54,13 @@ juliastoragetype(meta::Metadata.TimeMetadata, values_type) = Arrow.Time{TimeUnit
 juliatype{T<:Arrow.Timestamp}(::Type{T}) = DateTime
 juliatype{T<:Arrow.Date}(::Type{T}) = Date
 juliatype{T}(::Type{T}) = T
+juliatype(::Type{Arrow.Bool}) = Bool
 
-addlevels!{T}(::Type{T}, levels, i, meta, values_type, data) = return
-function addlevels!{T <: CategoricalArrays.CategoricalValue}(::Type{T}, catlevels, i, meta, values_type, data)
+addlevels!{T}(::Type{T}, levels, i, meta, values_type, data, version) = return
+function addlevels!{T <: CategoricalArrays.CategoricalValue}(::Type{T}, catlevels, i, meta, values_type, data, version)
     ptr = pointer(data) + meta.levels.offset
     offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), meta.levels.length + 1)
-    ptr += sizeof(offsets)
+    ptr += getoutputlength(version, sizeof(offsets))
     catlevels[i] = map(x->unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x]), 1:meta.levels.length)
     return
 end
@@ -97,7 +98,7 @@ function Source(file::AbstractString)
         push!(header, col.name)
         push!(types, juliastoragetype(col.metadata, col.values.type_))
         jl = juliatype(types[end])
-        addlevels!(jl, levels, i, col.metadata, col.values.type_, m)
+        addlevels!(jl, levels, i, col.metadata, col.values.type_, m, ctable.version)
         push!(juliatypes, col.values.null_count == 0 ? jl : Nullable{jl})
     end
     # construct Data.Schema and Feather.Source
@@ -125,14 +126,25 @@ function unwrap{T}(s::Source, ::Type{T}, col, rows, off=0)
     return unsafe_wrap(Array, convert(Ptr{T}, pointer(s.data) + s.ctable.columns[col].values.offset + getoutputlength(s.ctable.version, bitmask_bytes) + off), rows, false)::Vector{T}
 end
 
-transform!{T}(::Type{T}, A) = T[x for x in A]
-transform!(::Type{Arrow.Date}, A) = map(x->Arrow.unix2date(x), A)
-transform!{P,Z}(::Type{Arrow.Timestamp{P,Z}}, A) = map(x->Arrow.unix2datetime(P, x), A)
-transform!{T,R}(::Union{Type{NominalValue{T,R}},Type{OrdinalValue{T,R}}}, A) = map(x->x + R(1), A)
+transform!{T}(::Type{T}, A, len) = T[x for x in A]
+transform!(::Type{Date}, A, len) = map(x->Arrow.unix2date(x), A)
+transform!{P,Z}(::Type{DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) = map(x->Arrow.unix2datetime(P, x), A)
+transform!{T,R}(::Union{Type{NominalValue{T,R}},Type{OrdinalValue{T,R}}}, A, len) = map(x->x + R(1), A)
+function transform!(::Type{Bool}, A, len)
+    B = falses(len)
+    Base.copy_chunks!(B.chunks, 1, map(x->x.value, A), 1, length(A) * 64)
+    return convert(Vector{Bool}, B)
+end
 
 function Data.getcolumn{T}(source::Source, ::Type{T}, col)
     checknonull(source, col)
-    return transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)::Vector{T})
+    A = unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)
+    return transform!(T, A, source.ctable.num_rows)::Vector{T}
+end
+function Data.getcolumn(source::Source, ::Type{Bool}, col)
+    checknonull(source, col)
+    A = unwrap(source, source.feathertypes[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
+    return transform!(Bool, A, source.ctable.num_rows)::Vector{Bool}
 end
 function Data.getcolumn{T <: AbstractString}(source::Source, ::Type{T}, col)
     checknonull(source, col)
@@ -141,38 +153,38 @@ function Data.getcolumn{T <: AbstractString}(source::Source, ::Type{T}, col)
     return [unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
 function Data.getcolumn{T}(source::Source, ::Type{Nullable{T}}, col)
-    A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)::Vector{T})
+    A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)::Vector{T}
     bools = getbools(source, col)
     return NullableArray{T,1}(A, bools, source.data)
 end
 function Data.getcolumn{T <: AbstractString}(source::Source, ::Type{Nullable{T}}, col)
     offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
     values = unwrap(source, UInt8, col, offsets[end], sizeof(offsets))
-    A = [WeakRefString(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for x = 1:source.ctable.num_rows]
+    A = [WeakRefString(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     bools = getbools(source, col)
     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
 end
 function Data.getcolumn{T,R}(source::Source, ::Type{OrdinalValue{T,R}}, col)
     checknonull(source, col)
-    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows)::Vector{R})
+    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     pool = OrdinalPool{String, R}(source.levels[col])
     return OrdinalArray{String,1,R}(refs, pool)
 end
 function Data.getcolumn{T,R}(source::Source, ::Type{NominalValue{T,R}}, col)
     checknonull(source, col)
-    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows)::Vector{R})
+    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     pool = NominalPool{String, R}(source.levels[col])
     return NominalArray{String,1,R}(refs, pool)
 end
 function Data.getcolumn{T,R}(source::Source, ::Type{Nullable{OrdinalValue{T,R}}}, col)
-    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows)::Vector{R})
+    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
     pool = OrdinalPool{String, R}(source.levels[col])
     return NullableOrdinalArray{String,1,R}(refs, pool)
 end
 function Data.getcolumn{T,R}(source::Source, ::Type{Nullable{NominalValue{T,R}}}, col)
-    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows)::Vector{R})
+    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
     pool = NominalPool{String, R}(source.levels[col])
@@ -238,13 +250,17 @@ function getmetadata{S,R}(io, T::Union{Type{NominalValue{S,R}},Type{OrdinalValue
     offset = position(io)
     total_bytes = writepadded(io, view(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
     total_bytes += writepadded(io, lvls)
-    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(julia2Type_[R], Metadata.PLAIN, offset, len, 0, total_bytes), T <: OrdinalValue)
+    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), T <: OrdinalValue)
 end
 
 values(A::Vector) = A
 values(A::NullableVector) = A.values
 values{S,R}(A::Union{NominalArray{S,1,R},OrdinalArray{S,1,R},NullableNominalArray{S,1,R},NullableOrdinalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
 
+# Bool
+function writecolumn(io, ::Type{Bool}, o, b, A)
+    return writepadded(io, view(reinterpret(UInt8, convert(BitVector, values(A)).chunks), 1:bytes_for_bits(length(A))))
+end
 # Category
 function writecolumn{S,R}(io, ::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}, o, b, A)
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
@@ -287,7 +303,7 @@ function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, offs
     end
     diff = paddedlength(offsets[len+1]) - offsets[len+1]
     if diff > 0
-        writepadded(io, zeros(UInt8, diff))
+        Base.write(io, zeros(UInt8, diff))
         total_bytes += diff
     end
     return total_bytes

@@ -1,5 +1,9 @@
 module Arrow
 
+immutable Bool
+    value::UInt64
+end
+
 # Time types
 immutable Second end
 immutable Millisecond end
@@ -26,7 +30,7 @@ function datetime2unix(x::DateTime)
     return Dates.value(x) - UNIXEPOCH_TS
 end
 
-Base.convert{P,Z}(::Type{DateTime}, x::Timestamp{P,Z}) = unix2datetime(P, x.value)
+Base.convert{P,Z}(::Type{DateTime}, x::Timestamp{P,Z}) = unix2datetime(P, x)
 Base.show(io::IO, x::Timestamp) = show(io, convert(DateTime,x))
 
 immutable Date

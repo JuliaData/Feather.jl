@@ -1,5 +1,4 @@
-using Feather, DataFrames
-using Base.Test
+using Feather, DataFrames, Base.Test
 
 testdir = joinpath(dirname(@__FILE__), "data")
 # testdir = joinpath("/Users/jacobquinn/.julia/v0.5/Feather/test","data")
@@ -26,7 +25,6 @@ for f in files
     @test Data.header(source) == Data.header(sink) && Data.types(source) == Data.types(sink)
     @test source.ctable.description == sink.ctable.description
     @test source.ctable.num_rows == sink.ctable.num_rows
-    @test source.ctable.version == sink.ctable.version
     @test source.ctable.metadata == sink.ctable.metadata
     for (col1,col2) in zip(source.ctable.columns,sink.ctable.columns)
         @test col1.name == col2.name
@@ -40,7 +38,7 @@ for f in files
         # @test v1.offset == v2.offset # currently not python/R compatible due to wesm/feather#182
         @test v1.length == v2.length
         @test v1.null_count == v2.null_count
-        @test v1.total_bytes == v2.total_bytes
+        # @test v1.total_bytes == v2.total_bytes
     end
     rm(temp)
 end
@@ -86,3 +84,31 @@ sink = Feather.Sink(joinpath(testdir, "test_utf8_new.feather"))
 Feather.write(sink, source)
 @test isequal(ds, Feather.read(sink_file))
 rm(sink_file)
+
+# python round-tripping
+run(`python3 $(joinpath(testdir,"../runtests.py"))`)
+# read python-generated feather file
+df = Feather.read("test.feather")
+
+@test df[1] == ["hey","there","sailor"]
+@test df[2] == [true, true, false]
+@test df[3] == CategoricalArrays.NominalArray(["a","b","c"])
+@test df[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df[5] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df[6], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
+@test df[7] == [Inf,1.0,0.0]
+
+Feather.write("test2.feather", df)
+df2 = Feather.read("test2.feather")
+
+@test df2[1] == ["hey","there","sailor"]
+@test df2[2] == [true, true, false]
+@test df2[3] == CategoricalArrays.NominalArray(["a","b","c"])
+@test df2[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df2[5] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df2[6], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
+@test df2[7] == [Inf,1.0,0.0]
+
+run(`python3 $(joinpath(testdir,"../runtests2.py"))`)
+rm("test.feather")
+rm("test2.feather")

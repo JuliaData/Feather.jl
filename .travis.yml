@@ -13,6 +13,8 @@ python:
   - "3.5"
 
 install:
+  - sudo apt-get install -y libffi-dev libssl-dev
+  - sudo pip install requests[security]
   # Install conda
   - sudo pip install conda
   # install deps

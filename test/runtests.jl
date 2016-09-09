@@ -1,4 +1,4 @@
-using Feather, DataFrames, Base.Test
+using Feather, DataFrames, Base.Test, NullableArrays
 
 testdir = joinpath(dirname(@__FILE__), "data")
 # testdir = joinpath("/Users/jacobquinn/.julia/v0.5/Feather/test","data")

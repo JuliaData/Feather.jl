@@ -86,7 +86,7 @@ Feather.write(sink, source)
 rm(sink_file)
 
 # python round-tripping
-run(`python3 $(joinpath(testdir,"../runtests.py"))`)
+run(`python $(joinpath(testdir,"../runtests.py"))`)
 # read python-generated feather file
 df = Feather.read("test.feather")
 
@@ -109,6 +109,6 @@ df2 = Feather.read("test2.feather")
 @test isequal(df2[6], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[7] == [Inf,1.0,0.0]
 
-run(`python3 $(joinpath(testdir,"../runtests2.py"))`)
+run(`python $(joinpath(testdir,"../runtests2.py"))`)
 rm("test.feather")
 rm("test2.feather")

@@ -13,6 +13,7 @@ python:
   - "3.5"
 
 install:
+  - sudo pip install pyopenssl ndg-httpsclient pyasn1
   # Install conda
   - sudo pip install conda
   # install deps

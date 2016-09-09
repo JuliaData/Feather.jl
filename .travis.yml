@@ -15,14 +15,9 @@ python:
 install:
   - sudo apt-get install -y libffi-dev libssl-dev
   - sudo pip install requests[security]
-  # Install conda
-  - sudo pip install conda
-  # install deps
-  - sudo conda init
-  - sudo conda update conda --yes
-  - deps='pip numpy pandas feather-format'
-  - conda create -p $HOME/py --yes $deps "python=$TRAVIS_PYTHON_VERSION"
-  - export PATH=$HOME/py/bin:$PATH
+  - sudo pip install numpy
+  - sudo pip install pandas
+  - sudo pip install feather-format
 
 notifications:
   email: false

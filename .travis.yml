@@ -17,6 +17,7 @@ install:
   - sudo pip install requests[security]
   - sudo pip install numpy
   - sudo pip install pandas
+  - sudo pip install Cython
   - sudo pip install feather-format
 
 notifications:

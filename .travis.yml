@@ -13,8 +13,8 @@ python:
   - "3.5"
 
 install:
-  - "pip install Cython"
-  - "pip install feather-format"
+  - "sudo pip install Cython"
+  - "sudo pip install feather-format"
 
 notifications:
   email: false

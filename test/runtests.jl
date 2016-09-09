@@ -86,29 +86,29 @@ Feather.write(sink, source)
 rm(sink_file)
 
 # python round-tripping
-run(`python $(joinpath(testdir,"../runtests.py"))`)
+run(`python3 $(joinpath(testdir,"../runtests.py"))`)
 # read python-generated feather file
 df = Feather.read("test.feather")
 
 @test df[1] == ["hey","there","sailor"]
 @test df[2] == [true, true, false]
-@test df[3] == CategoricalArrays.NominalArray(["a","b","c"])
-@test df[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
-@test df[5] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-@test isequal(df[6], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
-@test df[7] == [Inf,1.0,0.0]
+# @test df[3] == CategoricalArrays.NominalArray(["a","b","c"])
+# @test df[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df[3] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
+@test df[5] == [Inf,1.0,0.0]
 
 Feather.write("test2.feather", df)
 df2 = Feather.read("test2.feather")
 
 @test df2[1] == ["hey","there","sailor"]
 @test df2[2] == [true, true, false]
-@test df2[3] == CategoricalArrays.NominalArray(["a","b","c"])
-@test df2[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
-@test df2[5] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-@test isequal(df2[6], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
-@test df2[7] == [Inf,1.0,0.0]
+# @test df2[3] == CategoricalArrays.NominalArray(["a","b","c"])
+# @test df2[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df2[3] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df2[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
+@test df2[5] == [Inf,1.0,0.0]
 
-run(`python $(joinpath(testdir,"../runtests2.py"))`)
+run(`python3 $(joinpath(testdir,"../runtests2.py"))`)
 rm("test.feather")
 rm("test2.feather")

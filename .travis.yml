@@ -26,6 +26,7 @@ install:
   # Useful for debugging any issues with conda
   - conda info -a
   - conda install numpy pandas
+  - sudo pip install cython
   - sudo pip install feather-format
   - sudo pip install feather-format --upgrade
 

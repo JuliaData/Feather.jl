@@ -1,7 +1,7 @@
 using Feather, DataFrames, Base.Test, NullableArrays
 
 testdir = joinpath(dirname(@__FILE__), "data")
-# testdir = joinpath("/Users/jacobquinn/.julia/v0.5/Feather/test","data")
+# testdir = joinpath(Pkg.dir("Feather"), "test/data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 
 testnull{T}(v1::T, v2::T) = v1 == v2
@@ -86,7 +86,7 @@ Feather.write(sink, source)
 rm(sink_file)
 
 # python round-tripping
-run(`python3 $(joinpath(testdir,"../runtests.py"))`)
+run(`python $(joinpath(testdir,"../runtests.py"))`)
 # read python-generated feather file
 df = Feather.read("test.feather")
 
@@ -109,6 +109,6 @@ df2 = Feather.read("test2.feather")
 @test isequal(df2[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[5] == [Inf,1.0,0.0]
 
-run(`python3 $(joinpath(testdir,"../runtests2.py"))`)
+run(`python $(joinpath(testdir,"../runtests2.py"))`)
 rm("test.feather")
 rm("test2.feather")

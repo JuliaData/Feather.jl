@@ -20,7 +20,6 @@ install:
   - sudo pip install cython
   - sudo pip install numpy pandas
   - sudo pip install feather-format
-  - sudo pip install feather-format --upgrade
 
 notifications:
   email: false

@@ -26,7 +26,8 @@ install:
   # Useful for debugging any issues with conda
   - conda info -a
   - conda install numpy pandas
-  - conda install feather-format -c conda-forge
+  - sudo pip install feather-format
+  - sudo pip install feather-format --upgrade
 
 notifications:
   email: false

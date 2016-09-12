@@ -17,9 +17,9 @@ compiler: gcc
 
 install:
   - sudo apt-get update
-  - sudo pip install cython
-  - sudo pip install numpy pandas
-  - sudo pip install feather-format
+  - pip install cython
+  - pip install -r requirements.txt
+  - pip install feather-format
 
 notifications:
   email: false

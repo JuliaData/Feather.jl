@@ -123,7 +123,7 @@ getbools(s::Source, col) = Bool[getbit(s.data[s.ctable.columns[col].values.offse
 
 function unwrap{T}(s::Source, ::Type{T}, col, rows, off=0)
     bitmask_bytes = s.ctable.columns[col].values.null_count > 0 ? bytes_for_bits(rows) : 0
-    return unsafe_wrap(Array, convert(Ptr{T}, pointer(s.data) + s.ctable.columns[col].values.offset + getoutputlength(s.ctable.version, bitmask_bytes) + off), rows, false)::Vector{T}
+    return unsafe_wrap(Array, convert(Ptr{T}, pointer(s.data) + s.ctable.columns[col].values.offset + getoutputlength(s.ctable.version, bitmask_bytes) + off), rows)::Vector{T}
 end
 
 transform!{T}(::Type{T}, A, len) = T[x for x in A]

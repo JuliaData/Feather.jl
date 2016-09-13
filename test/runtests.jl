@@ -85,6 +85,8 @@ Feather.write(sink, source)
 @test isequal(ds, Feather.read(sink_file))
 rm(sink_file)
 
+if haskey(ENV, "TRAVIS")
+println("Running python round-trip tests on travis...")
 # python round-tripping
 run(`python $(joinpath(testdir,"../runtests.py"))`)
 # read python-generated feather file
@@ -112,3 +114,4 @@ df2 = Feather.read("test2.feather")
 run(`python $(joinpath(testdir,"../runtests2.py"))`)
 rm("test.feather")
 rm("test2.feather")
+end

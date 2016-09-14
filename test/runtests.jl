@@ -86,6 +86,7 @@ Feather.write(sink, source)
 rm(sink_file)
 
 if haskey(ENV, "TRAVIS")
+feahterdir = ""
 try
 println("Running python round-trip tests on travis...")
 
@@ -125,6 +126,9 @@ run(`python $(joinpath(testdir,"../runtests2.py"))`)
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests2.py $featherdir`)
 
 finally
+try
 rm(featherdir; force=true, recursive=true)
+catch
+end
 end
 end

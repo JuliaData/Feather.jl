@@ -93,10 +93,12 @@ println("Running python round-trip tests on travis...")
 tempdir = "julia_feather_testing"
 featherdir = joinpath(dirname(tempname()), tempdir)
 mkdir(featherdir)
+println("Created testing directory: $featherdir")
 
 cp("runtests.py",joinpath(featherdir,"runtests.py"))
 # python round-tripping
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests.py $featherdir`)
+println("Docker run...reading into julia")
 
 # read python-generated feather file
 df = Feather.read(joinpath(featherdir,"test.feather"))
@@ -109,6 +111,7 @@ df = Feather.read(joinpath(featherdir,"test.feather"))
 @test isequal(df[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df[5] == [Inf,1.0,0.0]
 
+println("Writing test2.feather")
 Feather.write(joinpath(featherdir,"test2.feather"), df)
 df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 
@@ -122,7 +125,7 @@ df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 
 cp("runtests2.py", joinpath(featherdir, "runtests2.py"))
 
-run(`python $(joinpath(testdir,"../runtests2.py"))`)
+println("Running 2nd docker...")
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests2.py $featherdir`)
 
 finally

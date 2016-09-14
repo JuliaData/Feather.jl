@@ -93,7 +93,7 @@ tempdir = "julia_feather_testing"
 featherdir = joinpath(dirname(tempname()), tempdir)
 mkdir(featherdir)
 
-cp("../runtests.py",joinpath(featherdir,"runtests.py"))
+cp("runtests.py",joinpath(featherdir,"runtests.py"))
 # python round-tripping
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests.py $featherdir`)
 
@@ -119,7 +119,7 @@ df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 @test isequal(df2[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[5] == [Inf,1.0,0.0]
 
-cp("../runtests2.py", joinpath(featherdir, "runtests2.py"))
+cp("runtests2.py", joinpath(featherdir, "runtests2.py"))
 
 run(`python $(joinpath(testdir,"../runtests2.py"))`)
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests2.py $featherdir`)

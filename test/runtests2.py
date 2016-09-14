@@ -1,6 +1,6 @@
 import feather, pandas, numpy as np, datetime, unittest
 
-df2 = feather.read_dataframe("test2.feather")
+df2 = feather.read_dataframe(sys.argv[1] + "/test2.feather")
 
 class TestFeather(unittest.TestCase):
 

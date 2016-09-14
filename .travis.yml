@@ -1,6 +1,8 @@
 sudo: required
-dist: trusty
 language: julia
+
+services:
+  - docker
 
 os:
   - linux
@@ -10,16 +12,8 @@ julia:
   - 0.5
   - nightly
 
-python:
-  - "2.7"
-
-compiler: gcc
-
-install:
-  - sudo apt-get update
-  - pip install cython
-  - pip install -r requirements.txt
-  - pip install feather-format
+before_install:
+  - docker pull quinnj/feather
 
 notifications:
   email: false

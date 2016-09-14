@@ -86,32 +86,45 @@ Feather.write(sink, source)
 rm(sink_file)
 
 if haskey(ENV, "TRAVIS")
+try
 println("Running python round-trip tests on travis...")
+
+tempdir = "julia_feather_testing"
+featherdir = joinpath(dirname(tempname()), tempdir)
+mkdir(featherdir)
+
+cp("../runtests.py",joinpath(featherdir,"runtests.py"))
 # python round-tripping
-run(`python $(joinpath(testdir,"../runtests.py"))`)
+run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests.py $featherdir`)
+
 # read python-generated feather file
-df = Feather.read("test.feather")
+df = Feather.read(joinpath(featherdir,"test.feather"))
 
 @test df[1] == ["hey","there","sailor"]
 @test df[2] == [true, true, false]
-# @test df[3] == CategoricalArrays.NominalArray(["a","b","c"])
-# @test df[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df[3] == CategoricalArrays.NominalArray(["a","b","c"])
+@test df[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
 @test df[3] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
 @test isequal(df[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df[5] == [Inf,1.0,0.0]
 
-Feather.write("test2.feather", df)
-df2 = Feather.read("test2.feather")
+Feather.write(joinpath(featherdir,"test2.feather"), df)
+df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 
 @test df2[1] == ["hey","there","sailor"]
 @test df2[2] == [true, true, false]
-# @test df2[3] == CategoricalArrays.NominalArray(["a","b","c"])
-# @test df2[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df2[3] == CategoricalArrays.NominalArray(["a","b","c"])
+@test df2[4] == CategoricalArrays.OrdinalArray(["d","e","f"])
 @test df2[3] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
 @test isequal(df2[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[5] == [Inf,1.0,0.0]
 
+cp("../runtests2.py", joinpath(featherdir, "runtests2.py"))
+
 run(`python $(joinpath(testdir,"../runtests2.py"))`)
-rm("test.feather")
-rm("test2.feather")
+run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests2.py $featherdir`)
+
+finally
+rm(featherdir; force=true, recursive=true)
+end
 end

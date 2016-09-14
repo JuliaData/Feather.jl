@@ -97,7 +97,7 @@ cp("runtests.py",joinpath(featherdir,"runtests.py"))
 # python round-tripping
 run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests.py $featherdir`)
 println("Docker run...reading into julia")
-chmod(featherdir, "777"; recursive=true)
+chmod(featherdir, 777; recursive=true)
 # read python-generated feather file
 df = Feather.read(joinpath(featherdir,"test.feather"))
 

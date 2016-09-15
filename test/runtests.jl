@@ -85,7 +85,7 @@ Feather.write(sink, source)
 @test isequal(ds, Feather.read(sink_file))
 rm(sink_file)
 
-if success(`docker --version`)
+if is_windows() ? success(`where docker`) : success(`which docker`)
 println("Running python round-trip tests on travis...")
 
 println("Pulling feather docker image...")

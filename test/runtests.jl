@@ -88,7 +88,7 @@ rm(sink_file)
 if haskey(ENV, "TRAVIS")
 println("Running python round-trip tests on travis...")
 
-run(`docker run -n feathertest quinnj/feather`)
+run(`docker run -name feathertest quinnj/feather`)
 
 run(`docker cp runtests.py feathertest:/home/runtests.py`)
 

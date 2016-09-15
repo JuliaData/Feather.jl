@@ -1,4 +1,5 @@
 sudo: required
+
 language: julia
 
 services:
@@ -6,14 +7,12 @@ services:
 
 os:
   - linux
+  - osx
 
 julia:
   - 0.4
   - 0.5
   - nightly
-
-before_install:
-  - docker pull quinnj/feather
 
 notifications:
   email: false

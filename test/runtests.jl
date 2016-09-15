@@ -85,20 +85,21 @@ Feather.write(sink, source)
 @test isequal(ds, Feather.read(sink_file))
 rm(sink_file)
 
-if haskey(ENV, "TRAVIS")
+if success(`docker --version`)
 println("Running python round-trip tests on travis...")
 
+println("Pulling feather docker image...")
+run(`docker pull quinnj/feather`)
+
+println("Create docker container from feather image...")
 run(`docker run -it -d --name feathertest quinnj/feather /bin/sh`)
 
+println("Generate a test.feather file from python...")
 run(`docker cp runtests.py feathertest:/home/runtests.py`)
-
-# python round-tripping
 run(`docker exec feathertest python /home/runtests.py`)
-println("Docker run...reading into julia")
 
+println("Read test.feather into julia...")
 run(`docker cp feathertest:/home/test.feather test.feather`)
-
-# read python-generated feather file
 df = Feather.read("test.feather")
 
 @test df[:Autf8] == ["hey","there","sailor"]
@@ -109,7 +110,7 @@ df = Feather.read("test.feather")
 @test isequal(df[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df[:Afloat64] == [Inf,1.0,0.0]
 
-println("Writing test2.feather")
+println("Writing test2.feather from julia...")
 Feather.write("test2.feather", df)
 df2 = Feather.read("test2.feather")
 
@@ -121,12 +122,14 @@ df2 = Feather.read("test2.feather")
 @test isequal(df2[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[:Afloat64] == [Inf,1.0,0.0]
 
-println("Running 2nd docker...")
+println("Read test2.feather into python...")
 run(`docker cp test2.feather feathertest:/home/test2.feather`)
 run(`docker cp runtests2.py feathertest:/home/runtests2.py`)
 run(`docker exec feathertest python /home/runtests2.py`)
 
 run(`docker stop feathertest`)
 run(`docker rm feathertest`)
+rm("test.feather")
+rm("test2.feather")
 
 end

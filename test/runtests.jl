@@ -111,7 +111,7 @@ df = Feather.read("test.feather")
 
 println("Writing test2.feather")
 Feather.write("test2.feather", df)
-df2 = Feather.read(joinpath(featherdir,"test2.feather"))
+df2 = Feather.read("test2.feather")
 
 @test df2[:Autf8] == ["hey","there","sailor"]
 @test df2[:Abool] == [true, true, false]

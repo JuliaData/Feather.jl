@@ -86,20 +86,20 @@ Feather.write(sink, source)
 rm(sink_file)
 
 if haskey(ENV, "TRAVIS")
-feahterdir = ""
-try
 println("Running python round-trip tests on travis...")
 
-featherdir = mktempdir()
-println("Created testing directory: $featherdir")
+run(`docker run -n feathertest quinnj/feather`)
 
-cp("runtests.py",joinpath(featherdir,"runtests.py"))
+run(`docker cp runtests.py feathertest:/home/runtests.py`)
+
 # python round-tripping
-run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests.py $featherdir`)
+run(`docker run quinnj/feather python /home/runtests.py`)
 println("Docker run...reading into julia")
-chmod(featherdir, 777; recursive=true)
+
+run(`docker cp feathertest:/home/test.feather test.feather`)
+
 # read python-generated feather file
-df = Feather.read(joinpath(featherdir,"test.feather"))
+df = Feather.read("test.feather")
 
 @test df[1] == ["hey","there","sailor"]
 @test df[2] == [true, true, false]
@@ -110,7 +110,7 @@ df = Feather.read(joinpath(featherdir,"test.feather"))
 @test df[5] == [Inf,1.0,0.0]
 
 println("Writing test2.feather")
-Feather.write(joinpath(featherdir,"test2.feather"), df)
+Feather.write("test2.feather", df)
 df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 
 @test df2[1] == ["hey","there","sailor"]
@@ -121,15 +121,11 @@ df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 @test isequal(df2[4], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[5] == [Inf,1.0,0.0]
 
-cp("runtests2.py", joinpath(featherdir, "runtests2.py"))
+run(`docker cp test2.feather feathertest:/home/test2.feather`)
+run(`docker cp runtests2.py feathertest:/home/runtests2.py`)
 
 println("Running 2nd docker...")
-run(`docker run -v $featherdir:$featherdir quinnj/feather python $featherdir/runtests2.py $featherdir`)
+run(`docker run quinnj/feather python /home/runtests2.py`)
+run(`docker rm feathertest`)
 
-finally
-try
-rm(featherdir; force=true, recursive=true)
-catch
-end
-end
 end

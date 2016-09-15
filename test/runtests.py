@@ -1,4 +1,4 @@
-import feather, pandas, numpy as np, datetime, sys
+import feather, pandas, numpy as np, datetime
 
 Abool = np.array([True,True,False])
 Aint8 = np.array([1,1,0], dtype=np.int8)
@@ -24,4 +24,4 @@ Acatordered = pandas.Categorical(["d","e","f"], categories=["d","e","f"],ordered
 
 df = pandas.DataFrame({"Abool": Abool,"Aint8": Aint8,"Aint16": Aint16,"Aint32": Aint32,"Aint64": Aint64,"Auint8": Auint8,"Auint16": Auint16,"Auint32": Auint32,"Auint64": Auint64,"Afloat32": Afloat32,"Afloat64": Afloat64,"Autf8": Autf8,"Abinary": Abinary,"Adatetime": Adatetime,"Acat": Acat,"Acatordered":Acatordered})
 
-feather.write_dataframe(df,  sys.argv[1] + "/test.feather")
+feather.write_dataframe(df,  "/home/test.feather")

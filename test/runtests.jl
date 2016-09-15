@@ -89,8 +89,16 @@ Feather.write(sink, source)
 @test isequal(ds, Feather.read(sink_file))
 rm(sink_file)
 
-if is_windows() ? success(`where docker`) : success(`which docker`)
-println("Running python round-trip tests on travis...")
+# check if valid, non-sudo docker is available
+dockercheck = false
+try
+    dockercheck = success(`docker images`)
+catch
+    println("It seems that `docker` is not installed or has to be run with sudo, skipping python roundtrip tests")
+end
+
+if dockercheck
+println("Running python round-trip tests...")
 
 println("Pulling feather docker image...")
 run(`docker pull quinnj/feather`)

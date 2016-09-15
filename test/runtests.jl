@@ -88,12 +88,12 @@ rm(sink_file)
 if haskey(ENV, "TRAVIS")
 println("Running python round-trip tests on travis...")
 
-run(`docker create --name feathertest quinnj/feather python /home/runtests.py`)
+run(`docker run -it -d --name feathertest quinnj/feather /bin/sh`)
 
 run(`docker cp runtests.py feathertest:/home/runtests.py`)
 
 # python round-tripping
-run(`docker start feathertest`)
+run(`docker exec feathertest python /home/runtests.py`)
 println("Docker run...reading into julia")
 
 run(`docker cp feathertest:/home/test.feather test.feather`)
@@ -122,12 +122,11 @@ df2 = Feather.read(joinpath(featherdir,"test2.feather"))
 @test df2[5] == [Inf,1.0,0.0]
 
 println("Running 2nd docker...")
-run(`docker create --name feathertest2 quinnj/feather python /home/runtests2.py`)
-run(`docker cp test2.feather feathertest2:/home/test2.feather`)
-run(`docker cp runtests2.py feathertest2:/home/runtests2.py`)
-run(`docker start feathertest2`)
+run(`docker cp test2.feather feathertest:/home/test2.feather`)
+run(`docker cp runtests2.py feathertest:/home/runtests2.py`)
+run(`docker exec feathertest python /home/runtests2.py`)
 
+run(`docker stop feathertest`)
 run(`docker rm feathertest`)
-run(`docker rm feathertest2`)
 
 end

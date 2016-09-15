@@ -1,5 +1,9 @@
 using Feather, DataFrames, Base.Test, NullableArrays
 
+if VERSION < v"0.5.0-dev+4267"
+    @eval is_windows() = $(OS_NAME == :Windows)
+end
+
 testdir = joinpath(dirname(@__FILE__), "data")
 # testdir = joinpath(Pkg.dir("Feather"), "test/data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))

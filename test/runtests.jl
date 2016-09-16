@@ -104,7 +104,7 @@ println("Pulling feather docker image...")
 run(`docker pull quinnj/feather:0.1`)
 
 println("Create docker container from feather image...")
-run(`docker run -it -d --name feathertest quinnj/feather /bin/sh`)
+run(`docker run -it -d --name feathertest quinnj/feather:0.1 /bin/sh`)
 
 println("Generate a test.feather file from python...")
 run(`docker cp runtests.py feathertest:/home/runtests.py`)

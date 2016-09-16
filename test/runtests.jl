@@ -101,7 +101,7 @@ if dockercheck
 println("Running python round-trip tests...")
 
 println("Pulling feather docker image...")
-run(`docker pull quinnj/feather`)
+run(`docker pull quinnj/feather:0.1`)
 
 println("Create docker container from feather image...")
 run(`docker run -it -d --name feathertest quinnj/feather /bin/sh`)

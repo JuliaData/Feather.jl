@@ -98,13 +98,16 @@ catch
 end
 
 if dockercheck
+
+DOCKERTAG = "0.1"
+
 println("Running python round-trip tests...")
 
 println("Pulling feather docker image...")
-run(`docker pull quinnj/feather:0.1`)
+run(`docker pull quinnj/feather:$DOCKERTAG`)
 
 println("Create docker container from feather image...")
-run(`docker run -it -d --name feathertest quinnj/feather:0.1 /bin/sh`)
+run(`docker run -it -d --name feathertest quinnj/feather:$DOCKERTAG /bin/sh`)
 
 println("Generate a test.feather file from python...")
 run(`docker cp runtests.py feathertest:/home/runtests.py`)

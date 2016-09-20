@@ -45,7 +45,7 @@ end
 juliastoragetype(meta::Void, values_type) = Type_2julia[values_type]
 function juliastoragetype(meta::Metadata.CategoryMetadata, values_type)
     R = Type_2julia[values_type]
-    return meta.ordered ? OrdinalValue{String,R} : NominalValue{String,R}
+    return CategoricalValue{String,R}
 end
 juliastoragetype(meta::Metadata.TimestampMetadata, values_type) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
 juliastoragetype(meta::Metadata.DateMetadata, values_type) = Arrow.Date
@@ -56,22 +56,25 @@ juliatype{T<:Arrow.Date}(::Type{T}) = Date
 juliatype{T}(::Type{T}) = T
 juliatype(::Type{Arrow.Bool}) = Bool
 
-addlevels!{T}(::Type{T}, levels, i, meta, values_type, data, version) = return
-function addlevels!{T <: CategoricalArrays.CategoricalValue}(::Type{T}, catlevels, i, meta, values_type, data, version)
+addlevels!{T}(::Type{T}, levels, orders, i, meta, values_type, data, version) = return
+function addlevels!{T <: CategoricalValue}(::Type{T}, catlevels, orders, i, meta, values_type, data, version)
     ptr = pointer(data) + meta.levels.offset
     offsets = unsafe_wrap(Array, convert(Ptr{Int32}, ptr), meta.levels.length + 1)
     ptr += getoutputlength(version, sizeof(offsets))
     catlevels[i] = map(x->unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x]), 1:meta.levels.length)
+    orders[i] = meta.ordered
     return
 end
 
 # DataStreams interface types
 type Source <: Data.Source
+    path::String
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
     feathertypes::Vector{DataType} # separate from the types in schema, since we need to convert between feather storage types & julia types
     levels::Dict{Int,Vector{String}}
+    orders::Dict{Int,Bool}
     columns::Vector{Any} # holds references to pre-fetched columns for Data.getfield
 end
 
@@ -94,15 +97,16 @@ function Source(file::AbstractString)
     juliatypes = DataType[]
     columns = ctable.columns
     levels = Dict{Int,Vector{String}}()
+    orders = Dict{Int,Bool}()
     for (i, col) in enumerate(columns)
         push!(header, col.name)
         push!(types, juliastoragetype(col.metadata, col.values.type_))
         jl = juliatype(types[end])
-        addlevels!(jl, levels, i, col.metadata, col.values.type_, m, ctable.version)
-        push!(juliatypes, col.values.null_count == 0 ? jl : Nullable{jl})
+        addlevels!(jl, levels, orders, i, col.metadata, col.values.type_, m, ctable.version)
+        push!(juliatypes, col.values.null_count == 0 ? (jl <: AbstractString ? String : jl) : Nullable{jl})
     end
     # construct Data.Schema and Feather.Source
-    return Source(Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, levels, Array{Any}(length(columns)))
+    return Source(file, Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, levels, orders, Array{Any}(length(columns)))
 end
 
 # DataStreams interface
@@ -129,7 +133,7 @@ end
 transform!{T}(::Type{T}, A, len) = T[x for x in A]
 transform!(::Type{Date}, A, len) = map(x->Arrow.unix2date(x), A)
 transform!{P,Z}(::Type{DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) = map(x->Arrow.unix2datetime(P, x), A)
-transform!{T,R}(::Union{Type{NominalValue{T,R}},Type{OrdinalValue{T,R}}}, A, len) = map(x->x + R(1), A)
+transform!{T,R}(::Type{CategoricalValue{T,R}}, A, len) = map(x->x + R(1), A)
 function transform!(::Type{Bool}, A, len)
     B = falses(len)
     Base.copy_chunks!(B.chunks, 1, map(x->x.value, A), 1, length(A) * 64)
@@ -164,31 +168,18 @@ function Data.getcolumn{T <: AbstractString}(source::Source, ::Type{Nullable{T}}
     bools = getbools(source, col)
     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
 end
-function Data.getcolumn{T,R}(source::Source, ::Type{OrdinalValue{T,R}}, col)
+function Data.getcolumn{T,R}(source::Source, ::Type{CategoricalValue{T,R}}, col)
     checknonull(source, col)
-    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
-    pool = OrdinalPool{String, R}(source.levels[col])
-    return OrdinalArray{String,1,R}(refs, pool)
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
+    return CategoricalArray{String,1,R}(refs, pool)
 end
-function Data.getcolumn{T,R}(source::Source, ::Type{NominalValue{T,R}}, col)
-    checknonull(source, col)
-    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
-    pool = NominalPool{String, R}(source.levels[col])
-    return NominalArray{String,1,R}(refs, pool)
-end
-function Data.getcolumn{T,R}(source::Source, ::Type{Nullable{OrdinalValue{T,R}}}, col)
-    refs = transform!(OrdinalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+function Data.getcolumn{T,R}(source::Source, ::Type{Nullable{CategoricalValue{T,R}}}, col)
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
-    pool = OrdinalPool{String, R}(source.levels[col])
-    return NullableOrdinalArray{String,1,R}(refs, pool)
-end
-function Data.getcolumn{T,R}(source::Source, ::Type{Nullable{NominalValue{T,R}}}, col)
-    refs = transform!(NominalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
-    bools = getbools(source, col)
-    refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
-    pool = NominalPool{String, R}(source.levels[col])
-    return NullableNominalArray{String,1,R}(refs, pool)
+    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
+    return NullableCategoricalArray{String,1,R}(refs, pool)
 end
 
 """
@@ -215,20 +206,24 @@ function read end
 
 function read(file::AbstractString, sink=DataFrame, args...; append::Bool=false)
     source = Source(file)
-    return Data.stream!(source, sink, append, args...)
+    sink = Data.stream!(source, sink, append, args...)
+    Data.close!(sink)
+    return sink
 end
 
 function read{T}(file::AbstractString, sink::T; append::Bool=false)
     source = Source(file)
-    return Data.stream!(source, sink, append)
+    sink = Data.stream!(source, sink, append)
+    Data.close!(sink)
+    return sink
 end
 
-read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false) = Data.stream!(source, sink, append, args...)
-read{T}(source::Feather.Source, sink::T; append::Bool=false) = Data.stream!(source, sink, append)
+read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false) = (sink = Data.stream!(source, sink, append, args...); Data.close!(sink); return sink)
+read{T}(source::Feather.Source, sink::T; append::Bool=false) = (sink = Data.stream!(source, sink, append); Data.close!(sink); return sink)
 
 # writing feather files
 feathertype{T}(::Type{T}) = Feather.julia2Type_[T]
-feathertype{S,R}(::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}) = julia2Type_[R]
+feathertype{S,R}(::Type{CategoricalValue{S,R}}) = julia2Type_[R]
 feathertype{P}(::Type{Arrow.Time{P}}) = Metadata.INT64
 feathertype(::Type{Date}) = Metadata.INT32
 feathertype(::Type{DateTime}) = Metadata.INT64
@@ -238,7 +233,7 @@ getmetadata{T}(io, ::Type{T}, A) = nothing
 getmetadata(io, ::Type{Date}, A) = Metadata.DateMetadata()
 getmetadata{T}(io, ::Type{Arrow.Time{T}}, A) = Metadata.TimeMetadata(julia2TimeUnit[T])
 getmetadata(io, ::Type{DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
-function getmetadata{S,R}(io, T::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}, A)
+function getmetadata{S,R}(io, T::Type{CategoricalValue{S,R}}, A)
     lvls = CategoricalArrays.levels(A)
     len = length(lvls)
     offsets = zeros(Int32, len+1)
@@ -250,19 +245,19 @@ function getmetadata{S,R}(io, T::Union{Type{NominalValue{S,R}},Type{OrdinalValue
     offset = position(io)
     total_bytes = writepadded(io, view(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
     total_bytes += writepadded(io, lvls)
-    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), T <: OrdinalValue)
+    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), ordered(A))
 end
 
 values(A::Vector) = A
 values(A::NullableVector) = A.values
-values{S,R}(A::Union{NominalArray{S,1,R},OrdinalArray{S,1,R},NullableNominalArray{S,1,R},NullableOrdinalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
+values{S,R}(A::Union{CategoricalArray{S,1,R},NullableCategoricalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
 
 # Bool
 function writecolumn(io, ::Type{Bool}, o, b, A)
     return writepadded(io, view(reinterpret(UInt8, convert(BitVector, values(A)).chunks), 1:bytes_for_bits(length(A))))
 end
 # Category
-function writecolumn{S,R}(io, ::Union{Type{NominalValue{S,R}},Type{OrdinalValue{S,R}}}, o, b, A)
+function writecolumn{S,R}(io, ::Type{CategoricalValue{S,R}}, o, b, A)
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date
@@ -319,7 +314,7 @@ function writenulls(io, A::NullableVector, null_count, len, total_bytes)
     end
     return total_bytes
 end
-function writenulls{T <: Union{NullableNominalArray,NullableOrdinalArray}}(io, A::T, null_count, len, total_bytes)
+function writenulls{T <: NullableCategoricalArray}(io, A::T, null_count, len, total_bytes)
     # write out null bitmask
     if null_count > 0
         null_bytes = Feather.bytes_for_bits(len)
@@ -336,12 +331,34 @@ type Sink <: Data.Sink
     io::IO
     description::String
     metadata::String
+    df::DataFrame
 end
 
-function Sink(file::Union{IO,AbstractString}; description::AbstractString=String(""), metadata::AbstractString=String(""))
-    io = isa(file, AbstractString) ? open(file, "w") : file
+# construct a Sink from an existing Feather Source
+# function Sink(s::Feather.Source; append::Bool=false)
+#     data = open(s.path, append ? "a" : "w")
+#     seek(data, append ? filesize(s.path) : s.datapos)
+#     return Sink(s.schema, s.options, data, s.datapos, !append)
+# end
+
+function Sink{T<:Data.StreamType}(file::Union{IO,AbstractString}, schema::Data.Schema=Data.EMPTYSCHEMA, ::Type{T}=Data.Column;
+              description::AbstractString=String(""), metadata::AbstractString=String(""), append::Bool=false)
+    df = DataFrame(schema, T)
+    if isa(file, AbstractString)
+        if append && isfile(file)
+            df = Feather.read(file)
+            schema.rows += size(df, 1)
+        end
+        io = open(file, "w")
+    else
+        if append
+            df = Feather.read(file)
+            schema.rows += size(df, 1)
+        end
+        io = seekstart(file)
+    end
     writepadded(io, FEATHER_MAGIC_BYTES)
-    return Sink(Data.EMPTYSCHEMA, Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), io, description, metadata)
+    return Sink(schema, Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), io, description, metadata, df)
 end
 
 Base.close(s::Sink) = (applicable(close, s.io) && close(s.io); return nothing)
@@ -349,34 +366,39 @@ Base.flush(s::Sink) = (applicable(flush, s.io) && flush(s.io); return nothing)
 
 # DataStreams interface
 function Sink{T}(source, ::Type{T}, append::Bool, file::AbstractString)
-    sink = Sink(file)
-    # currently doesn't support appending to existing Sink
+    sink = Sink(file, Data.schema(source), T; append=append)
     return sink
 end
+
 function Sink{T}(sink, source, ::Type{T}, append::Bool)
-    # currently doesn't support appending to existing Sink
+    if !append
+        for col in sink.df.columns
+            empty!(col)
+        end
+    end
+    sink.schema = Data.schema(source)
+    sink.df = DataFrame(sink.schema, T)
     return sink
 end
 
 Data.streamtypes{T<:Feather.Sink}(::Type{T}) = [Data.Column, Data.Field]
 
-function Data.stream!(source, ::Type{Data.Field}, sink::Feather.Sink, append::Bool=false)
-    df = Data.stream!(source, DataFrame)
-    return Data.stream!(df, sink)
-end
+Data.streamfield!{T}(sink::Feather.Sink, source, ::Type{T}, row, col, cols, sinkrows) = Data.streamfield!(sink.df, source, T, row, col, cols, sinkrows)
 
-function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::Bool=false)
-    sch = Data.schema(source)
+Data.streamcolumn!{T}(sink::Feather.Sink, source, ::Type{T}, col, row) = Data.streamcolumn!(sink.df, source, T, col, row)
+
+function Data.close!(sink::Feather.Sink)
+    sch = Data.schema(sink)
     header = Data.header(sch)
     types = Data.types(sch)
-    # data = df.columns
+    data = sink.df
     io = sink.io
     # write out arrays, building each array's metadata as we go
     rows = size(sch, 1)
     columns = Metadata.Column[]
     for (i, name) in enumerate(header)
         @inbounds T = types[i]
-        arr = Data.getcolumn(source, T, i)
+        arr = data[i]
         total_bytes = 0
         offset = position(io)
         null_count = Data.nullcount(arr)
@@ -397,8 +419,7 @@ function Data.stream!(source, ::Type{Data.Column}, sink::Feather.Sink, append::B
     Base.write(io, Int32(length(rng)))
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
-    flush(io)
-    sink.schema = sch
+    close(io)
     sink.ctable = ctable
     return sink
 end
@@ -416,28 +437,28 @@ Examples:
 df = DataFrame(...)
 Feather.write("shiny_new_feather_file.feather", df)
 
-Feather.write("sqlite_query_result.feather", SQLite.Source, "select * from cool_table")
+Feather.write("sqlite_query_result.feather", SQLite.Source, db, "select * from cool_table")
 ```
 """
 function write end
 
-function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; # append::Bool=false,
+function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; append::Bool=false,
                     description::AbstractString=String(""), metadata::AbstractString=String(""))
     source = T(args...)
-    sink = Sink(io; description=description, metadata=metadata)
-    Data.stream!(source, sink, false) # append)
-    close(sink)
+    sink = Sink(io; description=description, metadata=metadata, append=append)
+    Data.stream!(source, sink, append)
+    Data.close!(sink)
     return sink
 end
-function write(io::Union{AbstractString,IO}, source; # append::Bool=false,
+function write(io::Union{AbstractString,IO}, source; append::Bool=false,
                     description::AbstractString=String(""), metadata::AbstractString=String(""))
-    sink = Sink(io; description=description, metadata=metadata)
-    Data.stream!(source, sink, false) # append)
-    close(sink)
+    sink = Sink(io; description=description, metadata=metadata, append=append)
+    Data.stream!(source, sink, append)
+    Data.close!(sink)
     return sink
 end
 
-write{T}(sink::Sink, ::Type{T}, args...; append::Bool=false) = Data.stream!(T(args...), sink, append)
-write(sink::Sink, source; append::Bool=false) = Data.stream!(source, sink, append)
+write{T}(sink::Sink, ::Type{T}, args...; append::Bool=false) = (sink = Data.stream!(T(args...), sink, append); Data.close!(sink); return sink)
+write(sink::Sink, source; append::Bool=false) = (sink = Data.stream!(source, sink, append); Data.close!(sink); return sink)
 
 end # module

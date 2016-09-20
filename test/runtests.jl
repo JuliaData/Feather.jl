@@ -19,6 +19,7 @@ for f in files
     temp = tempname()
     sink = Feather.Sink(temp)
     Feather.Data.stream!(df, sink)
+    Data.close!(sink)
     df2 = Feather.read(temp)
 
     for (c1,c2) in zip(df.columns,df2.columns)
@@ -119,8 +120,8 @@ df = Feather.read("test.feather")
 
 @test df[:Autf8] == ["hey","there","sailor"]
 @test df[:Abool] == [true, true, false]
-@test df[:Acat] == CategoricalArrays.NominalArray(["a","b","c"])
-@test df[:Acatordered] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
+@test df[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
 @test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
 @test isequal(df[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df[:Afloat64] == [Inf,1.0,0.0]
@@ -131,8 +132,8 @@ df2 = Feather.read("test2.feather")
 
 @test df2[:Autf8] == ["hey","there","sailor"]
 @test df2[:Abool] == [true, true, false]
-@test df2[:Acat] == CategoricalArrays.NominalArray(["a","b","c"])
-@test df2[:Acatordered] == CategoricalArrays.OrdinalArray(["d","e","f"])
+@test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
+@test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
 @test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
 @test isequal(df2[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
 @test df2[:Afloat64] == [Inf,1.0,0.0]

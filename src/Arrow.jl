@@ -26,9 +26,7 @@ function unix2datetime{P}(::Type{P}, x)
     rata = UNIXEPOCH_TS + scale(P, x)
     return DateTime(Dates.UTM(rata))
 end
-function datetime2unix(x::DateTime)
-    return Dates.value(x) - UNIXEPOCH_TS
-end
+datetime2unix(x::DateTime) = Dates.value(x) - UNIXEPOCH_TS
 
 Base.convert{P,Z}(::Type{DateTime}, x::Timestamp{P,Z}) = unix2datetime(P, x)
 Base.show(io::IO, x::Timestamp) = show(io, convert(DateTime,x))
@@ -42,7 +40,7 @@ function unix2date(x)
     rata = UNIXEPOCH_DT + x.value
     return Dates.Date(Dates.UTD(rata))
 end
-date2unix(x::Dates.Date) = Int32(Dates.value(x) - UNIXEPOCH_DT)
+date2unix(x::Dates.Date) = (Dates.value(x) - UNIXEPOCH_DT) % Int32
 
 Base.convert(::Type{Dates.Date}, x::Arrow.Date) = unix2date(x.value)
 Base.show(io::IO, x::Arrow.Date) = show(io, convert(Dates.Date,x))

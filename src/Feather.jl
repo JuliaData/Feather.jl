@@ -13,9 +13,7 @@ end
 
 using FlatBuffers, DataStreams, DataFrames, NullableArrays, CategoricalArrays, WeakRefStrings
 
-if isdefined(Main, :DataArray)
-    using DataArrays
-end
+using DataArrays
 
 export Data, DataFrame
 
@@ -274,17 +272,13 @@ end
 values(A::Vector) = A
 values(A::NullableVector) = A.values
 values{S,R}(A::Union{CategoricalArray{S,1,R},NullableCategoricalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
-if isdefined(Main, :DataArray)
-    values(A::DataArray) = A.data
-end
+values(A::DataArray) = A.data
 
 nullcount(A::NullableVector) = sum(A.isnull)
 nullcount(A::Vector) = 0
 nullcount(A::CategoricalArray) = 0
 nullcount(A::NullableCategoricalArray) = sum(A.refs .== 0)
-if isdefined(Main, :DataArray)
-    nullcount(A::DataArray) = sum(A.na)
-end
+nullcount(A::DataArray) = sum(A.na)
 
 # Bool
 function writecolumn(io, ::Type{Bool}, A)
@@ -353,16 +347,14 @@ function writenulls{T <: NullableCategoricalArray}(io, A::T, null_count, len, to
     end
     return total_bytes
 end
-if isdefined(Main, :DataArray)
-    function writenulls(io, A::DataArray, null_count, len, total_bytes)
-        # write out null bitmask
-        if null_count > 0
-            null_bytes = Feather.bytes_for_bits(len)
-            bytes = BitArray(!A.na)
-            total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
-        end
-        return total_bytes
+function writenulls(io, A::DataArray, null_count, len, total_bytes)
+    # write out null bitmask
+    if null_count > 0
+        null_bytes = Feather.bytes_for_bits(len)
+        bytes = BitArray(!A.na)
+        total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
+    return total_bytes
 end
 
 "DataStreams Sink implementation for feather-formatted binary files"

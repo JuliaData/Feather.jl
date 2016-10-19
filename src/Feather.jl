@@ -257,7 +257,7 @@ function getmetadata{S,R}(io, T::Type{CategoricalValue{S,R}}, A)
     offset = position(io)
     total_bytes = writepadded(io, view(reinterpret(UInt8, offsets), 1:(sizeof(Int32) * (len + 1))))
     total_bytes += writepadded(io, lvls)
-    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), ordered(A))
+    return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), isordered(A))
 end
 
 values(A::Vector) = A

@@ -1,4 +1,16 @@
-using DataFrames, WeakRefStrings
+using Feather, DataFrames, Base.Test, DataArrays, NullableArrays, WeakRefStrings
+
+installed = Pkg.installed()
+haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
+using DataStreamsIntegrationTests
+
+# test Data.Field-based streaming
+FFILE = joinpath(DSTESTDIR, "randoms_small.feather")
+source = Feather.Source(FFILE)
+sch = Data.schema(source, Data.Field)
+df = DataFrame(sch, Data.Field, false, Data.reference(source))
+Data.stream!(source, Data.Field, df, sch, sch, [identity, identity, identity, identity, identity, identity, identity])
+DataStreamsIntegrationTests.check(df, 99)
 
 # DataFrames
 FILE = joinpath(DSTESTDIR, "randoms_small.csv")

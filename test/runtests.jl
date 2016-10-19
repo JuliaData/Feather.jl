@@ -1,8 +1,11 @@
-using Feather, DataFrames, Base.Test, NullableArrays
+using Feather, DataFrames, Base.Test, NullableArrays, WeakRefStrings
 
 testdir = joinpath(dirname(@__FILE__), "data")
+testdir2 = joinpath(dirname(@__FILE__), "newdata")
 # testdir = joinpath(Pkg.dir("Feather"), "test/data")
+# testdir2 = joinpath(Pkg.dir("Feather"), "test/newdata")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
+append!(files, map(x -> joinpath(testdir2, x), readdir(testdir2)))
 
 testnull{T}(v1::T, v2::T) = v1 == v2
 testnull{T}(v1::Nullable{T}, v2::Nullable{T}) = (isnull(v1) && isnull(v2)) || (!isnull(v1) && !isnull(v2) && get(v1) == get(v2))
@@ -73,24 +76,26 @@ run(`docker cp feathertest:/home/test.feather test.feather`)
 df = Feather.read("test.feather")
 
 @test isequal(df[:Autf8], NullableArray(["hey","there","sailor"]))
-@test df[:Abool] == [true, true, false]
-@test df[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
-@test df[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
-@test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df[:Abool], NullableArray([true, true, false]))
+@test isequal(df[:Acat], CategoricalArrays.NullableCategoricalArray(["a","b","c"]))
+@test isequal(df[:Acatordered], CategoricalArrays.NullableCategoricalArray(["d","e","f"]))
+@test isequal(df[:Adatetime], NullableArray([DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]))
 @test isequal(df[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
-@test df[:Afloat64] == [Inf,1.0,0.0]
+@test isequal(df[:Afloat64], NullableArray([Inf,1.0,0.0]))
+
+df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
 
 println("Writing test2.feather from julia...")
 Feather.write("test2.feather", df)
 df2 = Feather.read("test2.feather")
 
 @test isequal(df2[:Autf8], NullableArray(["hey","there","sailor"]))
-@test df2[:Abool] == [true, true, false]
-@test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
-@test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
-@test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+@test isequal(df2[:Abool], NullableArray([true, true, false]))
+@test isequal(df2[:Acat], CategoricalArrays.NullableCategoricalArray(["a","b","c"]))
+@test isequal(df2[:Acatordered], CategoricalArrays.NullableCategoricalArray(["d","e","f"]))
+@test isequal(df2[:Adatetime], NullableArray([DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]))
 @test isequal(df2[:Afloat32], NullableArray(Float32[1.0, 0.0, 0.0], [false, true, false]))
-@test df2[:Afloat64] == [Inf,1.0,0.0]
+@test isequal(df2[:Afloat64], NullableArray([Inf,1.0,0.0]))
 
 println("Read test2.feather into python...")
 run(`docker cp test2.feather feathertest:/home/test2.feather`)
@@ -104,8 +109,7 @@ rm("test2.feather")
 
 end
 
-installed = Pkg.installed()
-haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
-using DataStreamsIntegrationTests
+# needed until #265 is resolved
+workspace()
 
 include("datastreams.jl")

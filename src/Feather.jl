@@ -62,9 +62,9 @@ function addlevels!{T <: CategoricalValue}(::Type{T}, catlevels, orders, i, meta
     return
 end
 
-schematype{T}(::Type{T}, nullcount) = nullcount == 0 ? Vector{T} : NullableVector{T}
-schematype{T <: AbstractString}(::Type{T}, nullcount) = NullableVector{WeakRefString{UInt8}}
-schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount) = nullcount == 0 ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
+schematype{T}(::Type{T}, nullcount, nullable) = (nullcount == 0 && !nullable) ? Vector{T} : NullableVector{T}
+schematype{T <: AbstractString}(::Type{T}, nullcount, nullable) = NullableVector{WeakRefString{UInt8}}
+schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
 
 # DataStreams interface types
 type Source <: Data.Source
@@ -79,10 +79,10 @@ type Source <: Data.Source
 end
 
 # reading feather files
-function Source(file::AbstractString)
+function Source(file::AbstractString; nullable::Bool=true, use_mmap::Bool=true)
     # validity checks
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
-    m = Mmap.mmap(file)
+    m = use_mmap ? Mmap.mmap(file) : read(file)
     length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format"))
     (m[1:4] == FEATHER_MAGIC_BYTES && m[end-3:end] == FEATHER_MAGIC_BYTES) ||
         throw(ArgumentError("'$file' is not in the feather format"))
@@ -103,7 +103,7 @@ function Source(file::AbstractString)
         push!(types, juliastoragetype(col.metadata, col.values.type_))
         jl = juliatype(types[end])
         addlevels!(jl, levels, orders, i, col.metadata, col.values.type_, m, ctable.version)
-        push!(juliatypes, schematype(jl, col.values.null_count))
+        push!(juliatypes, schematype(jl, col.values.null_count, nullable))
     end
     # construct Data.Schema and Feather.Source
     return Source(file, Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, levels, orders, Array{Any}(length(columns)))
@@ -216,14 +216,14 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=DataFrame, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file), sink, append, transforms, args...)
+function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+    sink = Data.stream!(Source(file; nullable=nullable, use_mmap=use_mmap), sink, append, transforms, args...)
     Data.close!(sink)
     return sink
 end
 
-function read{T}(file::AbstractString, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file), sink, append, transforms)
+function read{T}(file::AbstractString, sink::T; nullable::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+    sink = Data.stream!(Source(file; nullable=nullable, use_mmap=use_mmap), sink, append, transforms)
     Data.close!(sink)
     return sink
 end

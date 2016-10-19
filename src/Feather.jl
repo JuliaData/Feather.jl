@@ -201,9 +201,16 @@ end
 `Feather.read(file, sink::Data.Sink)` => `Data.Sink`
 
 `Feather.read` takes a feather-formatted binary `file` argument and "streams" the data to the
-provided `sink` argument. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
+provided `sink` argument, a `DataFrame` by default. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
 or a Sink can be constructed "on the fly" by providing the type of Sink and any necessary positional arguments
-(the 1st method above). By default, a `DataFrame` is returned.
+(the 1st method above).
+
+Keyword arguments:
+
+  * `nullable::Bool=true`: will return columns as `NullableVector{T}` types by default, regarldess of # of null values. When set to `false`, columns without null values will be returned as regular `Vector{T}`
+  * `use_mmap::Bool=true`: indicates whether to use system `mmap` capabilities when reading the feather file; on some systems or environments, mmap may not be available or reliable (virtualbox env using shared directories can be problematic)
+  * `append::Bool=false`: indicates whether the feather file should be appended to the provided `sink` argument; note that column types between the feather file and existing sink must match to allow appending
+  * `transforms`: a `Dict{Int,Function}` or `Dict{String,Function}` that provides transform functions to be applied to feather fields or columns as they are parsed from the feather file; note that feather files can be parsed field-by-field or entire columns at a time, so transform functions need to operate on scalars or vectors appropriately, depending on the `sink` argument's preferred streaming type; by default, a `Feather.Source` will stream entire columns at a time, so a transform function would take a single `NullableVector{T}` argument and return an equal-length `NullableVector`
 
 Examples:
 
@@ -454,6 +461,11 @@ end
 
 Write a `Data.Source` out to disk as a feather-formatted binary file. The two methods allow the passing of a
 fully constructed `Data.Source` (2nd method), or the type of Source and any necessary positional arguments (1st method).
+
+Keyword arguments:
+
+  * `append::Bool=false`: indicates whether the `source` argument should be appended to an existing feather file; note that column types between the `source` argument and feather file must match to allow appending
+  * `transforms`: a `Dict{Int,Function}` or `Dict{String,Function}` that provides transform functions to be applied to source fields or columns as they are streamed to the feather file; note that feather sinks can be receive data field-by-field or entire columns at a time, so transform functions need to operate on scalars or vectors appropriately, depending on the `source` argument's allowed streaming types; by default, a `Feather.Sink` will stream entire columns at a time, so a transform function would take a single `NullableVector{T}` argument and return an equal-length `NullableVector`
 
 Examples:
 

@@ -12,23 +12,53 @@ df = DataFrame(sch, Data.Field, false, Data.reference(source))
 Data.stream!(source, Data.Field, df, sch, sch, [identity, identity, identity, identity, identity, identity, identity])
 DataStreamsIntegrationTests.check(df, 99)
 
+# test DataArray DataFrame
+for i = 1:size(df, 2)
+    if !(typeof(df.columns[i]) <: DataArray)
+        df.columns[i] = DataArray(df.columns[i].values, df.columns[i].isnull)
+    end
+end
+temp = tempname()
+Feather.write(temp, df)
+df = Feather.read(temp)
+DataStreamsIntegrationTests.check(df, 99)
+rm(temp)
+
 # DataFrames
 FILE = joinpath(DSTESTDIR, "randoms_small.csv")
 DF = readtable(FILE)
-DF[:hiredate] = NullableArray(Date[isnull(x) ? Date() : Date(get(x)) for x in DF[:hiredate]], [isnull(x) for x in DF[:hiredate]])
-DF[:lastclockin] = NullableArray(DateTime[isnull(x) ? DateTime() : DateTime(get(x)) for x in DF[:lastclockin]], [isnull(x) for x in DF[:lastclockin]])
-stringdata = join(String[get(x) for x in DF[2]])
-stringdata2 = join(String[get(x) for x in DF[3]])
 strings = DF[2]
 strings2 = DF[3]
 DF.columns[2] = NullableArray{WeakRefString{UInt8},1}(Array(WeakRefString{UInt8}, size(DF, 1)), ones(Bool, size(DF, 1)), stringdata.data)
 DF.columns[3] = NullableArray{WeakRefString{UInt8},1}(Array(WeakRefString{UInt8}, size(DF, 1)), ones(Bool, size(DF, 1)), stringdata2.data)
-ind = ind2 = 1
-for i = 1:size(DF, 1)
-    DF.columns[2][i] = Nullable(WeakRefString(pointer(stringdata, ind), length(get(strings[i])), ind))
-    DF.columns[3][i] = Nullable(WeakRefString(pointer(stringdata2, ind2), length(get(strings2[i])), ind2))
-    ind += length(get(strings[i]))
-    ind2 += length(get(strings2[i]))
+if typeof(DF[:hiredate]) <: NullableVector
+    DF[:hiredate] = NullableArray(Date[isnull(x) ? Date() : Date(get(x)) for x in DF[:hiredate]], [isnull(x) for x in DF[:hiredate]])
+    DF[:lastclockin] = NullableArray(DateTime[isnull(x) ? DateTime() : DateTime(get(x)) for x in DF[:lastclockin]], [isnull(x) for x in DF[:lastclockin]])
+    stringdata = join(String[get(x) for x in strings])
+    stringdata2 = join(String[get(x) for x in strings2])
+    ind = ind2 = 1
+    for i = 1:size(DF, 1)
+        DF.columns[2][i] = Nullable(WeakRefString(pointer(stringdata, ind), length(get(strings[i])), ind))
+        DF.columns[3][i] = Nullable(WeakRefString(pointer(stringdata2, ind2), length(get(strings2[i])), ind2))
+        ind += length(get(strings[i]))
+        ind2 += length(get(strings2[i]))
+    end
+else
+    for i = 1:5
+        T = eltype(DF.columns[i])
+        DF.columns[i] = NullableArray(T[isna(x) ? (T <: String ? "" : zero(T)) : x for x in DF.columns[i]], [isna(x) for x in DF.columns[i]])
+    end
+    DF.columns[6] = NullableArray(Date[isna(x) ? Date() : Date(x) for x in DF[:hiredate]], [isna(x) for x in DF[:hiredate]])
+    DF.columns[7] = NullableArray(DateTime[isna(x) ? DateTime() : DateTime(x) for x in DF[:lastclockin]], [isna(x) for x in DF[:lastclockin]])
+    stringdata = join(String[isna(x) ? "" : x for x in strings])
+    stringdata2 = join(String[isna(x) ? "" : x for x in strings2])
+    ind = ind2 = 1
+    for i = 1:size(DF, 1)
+        DF.columns[2][i] = Nullable(WeakRefString(pointer(stringdata, ind), length(strings[i]), ind))
+        DF.columns[3][i] = Nullable(WeakRefString(pointer(stringdata2, ind2), length(strings2[i]), ind2))
+        ind += length(strings[i])
+        ind2 += length(strings2[i])
+    end
 end
 DF2 = deepcopy(DF)
 dfsource = Tester("DataFrame", x->x, false, DataFrame, (:DF,), scalartransforms, vectortransforms, x->x, x->nothing)

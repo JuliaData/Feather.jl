@@ -1,9 +1,5 @@
 using Feather, DataFrames, Base.Test, NullableArrays
 
-if VERSION < v"0.5.0-dev+4267"
-    @eval is_windows() = $(OS_NAME == :Windows)
-end
-
 testdir = joinpath(dirname(@__FILE__), "data")
 # testdir = joinpath(Pkg.dir("Feather"), "test/data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
@@ -47,48 +43,6 @@ for f in files
     end
     rm(temp)
 end
-
-# DataStreams interface
-source_file = joinpath(testdir, "test_utf8.feather")
-sink_file = joinpath(testdir, "test_utf8_new.feather")
-
-ds = Feather.read(source_file)
-@test size(ds) == (3,3)
-Feather.read(source_file, Feather.Sink, sink_file)
-@test isequal(ds, Feather.read(sink_file))
-
-sink = Feather.Sink(joinpath(testdir, "test_utf8_new.feather"))
-Feather.read(source_file, sink)
-@test isequal(ds, Feather.read(sink_file))
-
-source = Feather.Source(source_file)
-ds = Feather.read(source)
-@test size(ds) == (3,3)
-source = Feather.Source(source_file)
-Feather.read(source, Feather.Sink, sink_file)
-@test isequal(ds, Feather.read(sink_file))
-
-sink = Feather.Sink(joinpath(testdir, "test_utf8_new.feather"))
-source = Feather.Source(source_file)
-Feather.read(source, sink)
-@test isequal(ds, Feather.read(sink_file))
-
-si = Feather.write(sink_file, Feather.Source, source_file)
-@test isequal(ds, Feather.read(sink_file))
-
-source = Feather.Source(source_file)
-Feather.write(sink_file, source)
-@test isequal(ds, Feather.read(sink_file))
-
-sink = Feather.Sink(joinpath(testdir, "test_utf8_new.feather"))
-Feather.write(sink, Feather.Source, source_file)
-@test isequal(ds, Feather.read(sink_file))
-
-source = Feather.Source(source_file)
-sink = Feather.Sink(joinpath(testdir, "test_utf8_new.feather"))
-Feather.write(sink, source)
-@test isequal(ds, Feather.read(sink_file))
-rm(sink_file)
 
 # check if valid, non-sudo docker is available
 dockercheck = false
@@ -149,3 +103,9 @@ rm("test.feather")
 rm("test2.feather")
 
 end
+
+installed = Pkg.installed()
+haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
+using DataStreamsIntegrationTests
+
+include("datastreams.jl")

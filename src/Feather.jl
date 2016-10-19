@@ -81,10 +81,10 @@ end
 function Source(file::AbstractString; nullable::Bool=true, use_mmap::Bool=true)
     # validity checks
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
-    m = use_mmap ? Mmap.mmap(file) : read(file)
-    length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format"))
+    m = use_mmap ? Mmap.mmap(file) : Base.read(file)
+    length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format: total length of file = $(length(m))"))
     (m[1:4] == FEATHER_MAGIC_BYTES && m[end-3:end] == FEATHER_MAGIC_BYTES) ||
-        throw(ArgumentError("'$file' is not in the feather format"))
+        throw(ArgumentError("'$file' is not in the feather format: header = $(m[1:4]), footer = $(m[end-3:end])"))
     # read file metadata using FlatBuffers
     metalength = Base.read(IOBuffer(m[length(m)-7:length(m)-4]), Int32)
     metapos = length(m) - (metalength + 7)

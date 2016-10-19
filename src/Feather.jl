@@ -441,9 +441,9 @@ function Data.close!(sink::Feather.Sink)
     # write out final magic bytes
     Base.write(io, FEATHER_MAGIC_BYTES)
     len = position(io)
-    f = Mmap.mmap(sink.file, Vector{UInt8}, len)
-    unsafe_copy!(f, 1, io.data, 1, len)
-    Mmap.sync!(f)
+    open(sink.file, "w") do f
+        Base.write(f, view(io.data, 1:len))
+    end
     sink.io = IOBuffer()
     sink.ctable = ctable
     return sink

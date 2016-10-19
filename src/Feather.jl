@@ -467,12 +467,12 @@ Feather.write("sqlite_query_result.feather", SQLite.Source, db, "select * from c
 """
 function write end
 
-function write{T}(io::Union{AbstractString,IO}, ::Type{T}, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}(), kwargs...)
+function write{T}(io::AbstractString, ::Type{T}, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}(), kwargs...)
     sink = Data.stream!(T(args...), Feather.Sink, append, transforms, io; kwargs...)
     Data.close!(sink)
     return sink
 end
-function write(io::Union{AbstractString,IO}, source; append::Bool=false, transforms::Dict=Dict{Int,Function}(), kwargs...)
+function write(io::AbstractString, source; append::Bool=false, transforms::Dict=Dict{Int,Function}(), kwargs...)
     sink = Data.stream!(source, Feather.Sink, append, transforms, io; kwargs...)
     Data.close!(sink)
     return sink

@@ -359,12 +359,28 @@ type Sink <: Data.Sink
     df::DataFrame
 end
 
+function renullify(A::NullableVector{WeakRefString{UInt8}})
+    if !isempty(A.parent)
+        parent = copy(A.parent)
+        B = [WeakRefString(pointer(parent, x.ind), x.len, x.ind) for x in A.values]
+        return NullableArray{WeakRefString{UInt8}, 1}(B, A.isnull, parent)
+    else
+        return A
+    end
+end
+
 function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column;
-              description::AbstractString=String(""), metadata::AbstractString=String(""), append::Bool=false)
-    df = DataFrame(schema, T)
+              description::AbstractString="", metadata::AbstractString="", append::Bool=false)
     if append && isfile(file)
         df = Feather.read(file)
+        for i = 1:size(df, 2)
+            if eltype(df.columns[i]) <: Nullable{WeakRefString{UInt8}}
+                df.columns[i] = renullify(df.columns[i])
+            end
+        end
         schema.rows += size(df, 1)
+    else
+        df = DataFrame(schema, T)
     end
     io = IOBuffer()
     Feather.writepadded(io, FEATHER_MAGIC_BYTES)
@@ -382,8 +398,10 @@ function Sink{T}(sink, sch::Data.Schema, ::Type{T}, append::Bool, ref::Vector{UI
         for col in sink.df.columns
             empty!(col)
         end
+        sink.df = DataFrame(sch, T)
+    else
+        sch.rows += size(sink.df, 1)
     end
-    sink.df = DataFrame(sch, T)
     return sink
 end
 

@@ -111,7 +111,6 @@ const julia2Type_ = Dict{DataType,Metadata.Type_}(
 )
 
 const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8, Metadata.BINARY])
-isprimitive(x::Metadata.Type_) = x in NON_PRIMITIVE_TYPES ? false : true
 
 const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
     Metadata.SECOND => Arrow.Second,

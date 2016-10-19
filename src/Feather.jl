@@ -23,7 +23,6 @@ include("metadata.jl")
 # wesm/feather/cpp/src/common.h
 const FEATHER_MAGIC_BYTES = "FEA1".data
 
-ceil_byte(size) = (size + 7) & ~7
 bytes_for_bits(size) = div(((size + 7) & ~7), 8)
 const BITMASK = UInt8[1, 2, 4, 8, 16, 32, 64, 128]
 getbit(byte::UInt8, i) = (byte & BITMASK[i]) == 0

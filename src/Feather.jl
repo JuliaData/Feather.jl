@@ -1,16 +1,5 @@
 module Feather
 
-if !isdefined(Core, :String)
-    typealias String UTF8String
-end
-if !isdefined(Base, :view)
-    view = sub
-end
-if Base.VERSION < v"0.5.0-dev+4631"
-    unsafe_wrap{A<:Array}(::Type{A}, ptr, len) = pointer_to_array(ptr, len)
-    unsafe_string(ptr, len) = utf8(ptr, len)
-end
-
 using FlatBuffers, DataStreams, DataFrames, NullableArrays, CategoricalArrays, WeakRefStrings
 
 using DataArrays

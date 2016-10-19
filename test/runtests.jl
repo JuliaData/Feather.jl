@@ -1,4 +1,4 @@
-using Feather, DataFrames, Base.Test, NullableArrays, WeakRefStrings
+using Feather, DataFrames, Base.Test, DataArrays, NullableArrays, WeakRefStrings
 
 testdir = joinpath(dirname(@__FILE__), "data")
 testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -108,6 +108,30 @@ rm("test.feather")
 rm("test2.feather")
 
 end
+
+installed = Pkg.installed()
+haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
+using DataStreamsIntegrationTests
+
+# test Data.Field-based streaming
+FFILE = joinpath(DSTESTDIR, "randoms_small.feather")
+source = Feather.Source(FFILE)
+sch = Data.schema(source, Data.Field)
+df = DataFrame(sch, Data.Field, false, Data.reference(source))
+Data.stream!(source, Data.Field, df, sch, sch, [identity, identity, identity, identity, identity, identity, identity])
+DataStreamsIntegrationTests.check(df, 99)
+
+# test DataArray DataFrame
+for i = 1:size(df, 2)
+    if !(typeof(df.columns[i]) <: DataArray)
+        df.columns[i] = DataArray(df.columns[i].values, df.columns[i].isnull)
+    end
+end
+temp = tempname()
+Feather.write(temp, df)
+df = Feather.read(temp)
+DataStreamsIntegrationTests.check(df, 99)
+rm(temp)
 
 # needed until #265 is resolved
 workspace()

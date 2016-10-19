@@ -175,8 +175,11 @@ function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column
 end
 function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{WeakRefString{UInt8}}}, col)
     offsets = Feather.unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
-    A = [WeakRefString(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
+    # values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    offset = source.ctable.columns[col].values.offset +
+             (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+             getoutputlength(source.ctable.version, sizeof(offsets))
+    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), offset + offsets[i]+1) for i = 1:source.ctable.num_rows]
     bools = getbools(source, col)
     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
 end

@@ -109,8 +109,6 @@ rm("test2.feather")
 
 end
 
-installed = Pkg.installed()
-haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
 using DataStreamsIntegrationTests
 
 # test Data.Field-based streaming

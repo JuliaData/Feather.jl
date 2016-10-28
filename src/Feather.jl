@@ -61,9 +61,9 @@ function addlevels!{T <: CategoricalValue}(::Type{T}, catlevels, orders, i, meta
     return
 end
 
-schematype{T}(::Type{T}, nullcount, nullable) = (nullcount == 0 && !nullable) ? Vector{T} : NullableVector{T}
-schematype{T <: AbstractString}(::Type{T}, nullcount, nullable) = NullableVector{WeakRefString{UInt8}}
-schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
+schematype{T}(::Type{T}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? Vector{T} : NullableVector{T}
+schematype{T <: AbstractString}(::Type{T}, nullcount, nullable, wrs) = wrs ? NullableVector{WeakRefString{UInt8}} : NullableVector{String}
+schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
 
 # DataStreams interface types
 type Source <: Data.Source
@@ -78,7 +78,7 @@ type Source <: Data.Source
 end
 
 # reading feather files
-function Source(file::AbstractString; nullable::Bool=true, use_mmap::Bool=true)
+function Source(file::AbstractString; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true)
     # validity checks
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
     m = use_mmap ? Mmap.mmap(file) : Base.read(file)
@@ -102,7 +102,7 @@ function Source(file::AbstractString; nullable::Bool=true, use_mmap::Bool=true)
         push!(types, juliastoragetype(col.metadata, col.values.type_))
         jl = juliatype(types[end])
         addlevels!(jl, levels, orders, i, col.metadata, col.values.type_, m, ctable.version)
-        push!(juliatypes, schematype(jl, col.values.null_count, nullable))
+        push!(juliatypes, schematype(jl, col.values.null_count, nullable, weakrefstrings))
     end
     # construct Data.Schema and Feather.Source
     return Source(file, Data.Schema(header, juliatypes, ctable.num_rows), ctable, m, types, levels, orders, Array{Any}(length(columns)))
@@ -172,9 +172,15 @@ function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     return T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
+function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
+    bools = getbools(source, col)
+    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
+    return NullableArray{T, 1}(A, bools)
+end
 function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{WeakRefString{UInt8}}}, col)
     offsets = Feather.unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    # values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     offset = source.ctable.columns[col].values.offset +
              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
@@ -225,14 +231,14 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file; nullable=nullable, use_mmap=use_mmap), sink, append, transforms, args...)
+function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, append, transforms, args...)
     Data.close!(sink)
     return sink
 end
 
-function read{T}(file::AbstractString, sink::T; nullable::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file; nullable=nullable, use_mmap=use_mmap), sink, append, transforms)
+function read{T}(file::AbstractString, sink::T; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, append, transforms)
     Data.close!(sink)
     return sink
 end

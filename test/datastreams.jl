@@ -1,8 +1,4 @@
-using Feather, DataFrames, Base.Test, DataArrays, NullableArrays, WeakRefStrings
-
-installed = Pkg.installed()
-haskey(installed, "DataStreamsIntegrationTests") || Pkg.clone("https://github.com/JuliaData/DataStreamsIntegrationTests")
-using DataStreamsIntegrationTests
+using Feather, DataFrames, Base.Test, DataArrays, NullableArrays, WeakRefStrings, DataStreamsIntegrationTests
 
 # DataFrames
 FILE = joinpath(DSTESTDIR, "randoms_small.csv")

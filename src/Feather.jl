@@ -124,7 +124,7 @@ vectortype{S, R}(::Type{CategoricalValue{S, R}}) = CategoricalVector{S, R}
 vectortype{S, R}(::Type{Nullable{CategoricalValue{S, R}}}) = NullableCategoricalVector{S, R}
 
 function Data.streamfrom{T}(source::Source, ::Type{Data.Field}, ::Type{T}, row, col)
-    !isdefined(source.columns, col) && (source.columns[col] = Data.streamfrom(source, Data.Column, vectortype(T), col))
+    !isassigned(source.columns, col) && (source.columns[col] = Data.streamfrom(source, Data.Column, vectortype(T), col))
     return source.columns[col][row]::T
 end
 

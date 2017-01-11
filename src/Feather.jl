@@ -21,7 +21,7 @@ include("Arrow.jl")
 include("metadata.jl")
 
 # wesm/feather/cpp/src/common.h
-const FEATHER_MAGIC_BYTES = "FEA1".data
+const FEATHER_MAGIC_BYTES = Vector{UInt8}("FEA1")
 
 bytes_for_bits(size) = div(((size + 7) & ~7), 8)
 const BITMASK = UInt8[1, 2, 4, 8, 16, 32, 64, 128]
@@ -310,8 +310,8 @@ end
 valuelength{T}(val::T) = length(String(val))
 valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
 
-writevalue{T}(io, val::T) = Base.write(io, String(val).data)
-writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, String(get(val)).data)
+writevalue{T}(io, val::T) = Base.write(io, Vector{UIn8}(String(val)))
+writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)
     len = length(arr)

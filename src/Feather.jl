@@ -310,7 +310,7 @@ end
 valuelength{T}(val::T) = length(String(val))
 valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
 
-writevalue{T}(io, val::T) = Base.write(io, Vector{UIn8}(String(val)))
+writevalue{T}(io, val::T) = Base.write(io, Vector{UInt8}(String(val)))
 writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)

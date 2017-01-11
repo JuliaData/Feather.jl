@@ -44,6 +44,8 @@ for f in files
         @test v1.null_count == v2.null_count
         # @test v1.total_bytes == v2.total_bytes
     end
+    source = df = sink = df2 = nothing
+    gc(); gc()
     rm(temp)
 end
 

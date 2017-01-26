@@ -12,10 +12,13 @@ testnull{T}(v1::Nullable{T}, v2::Nullable{T}) = (isnull(v1) && isnull(v2)) || (!
 testnull{T}(v1::T, v2::Nullable{T}) = !isnull(v2) && get(v2) == v1
 testnull{T}(v1::Nullable{T}, v2::T) = !isnull(v1) && get(v1) == v2
 
+temps = []
+
 for f in files
     source = Feather.Source(f)
     df = Data.stream!(source, DataFrame)
     temp = tempname()
+    push!(temps, temp)
     sink = Feather.Sink(temp)
     Feather.Data.stream!(df, sink)
     Data.close!(sink)
@@ -44,9 +47,11 @@ for f in files
         @test v1.null_count == v2.null_count
         # @test v1.total_bytes == v2.total_bytes
     end
-    source = df = sink = df2 = nothing
-    gc(); gc()
-    rm(temp)
+end
+
+gc(); gc()
+for t in temps
+    rm(t)
 end
 
 # check if valid, non-sudo docker is available
@@ -127,11 +132,6 @@ for i = 1:size(df, 2)
         df.columns[i] = DataArray(df.columns[i].values, df.columns[i].isnull)
     end
 end
-temp = tempname()
-Feather.write(temp, df)
-df = Feather.read(temp)
-DataStreamsIntegrationTests.check(df, 99)
-rm(temp)
 
 # needed until #265 is resolved
 workspace()

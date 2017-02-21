@@ -41,8 +41,8 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 [travis-img]: https://travis-ci.org/JuliaStats/Feather.jl.svg?branch=master
 [travis-url]: https://travis-ci.org/JuliaStats/Feather.jl
 
-[appveyor-img]: https://ci.appveyor.com/api/projects/status/h227adt6ovd1u3sx/branch/master?svg=true
-[appveyor-url]: https://ci.appveyor.com/project/JuliaStats/documenter-jl/branch/master
+[appveyor-img]: https://ci.appveyor.com/api/projects/status/github/quinnj/feather-jl?branch=master?svg=true
+[appveyor-url]: https://ci.appveyor.com/project/quinnj/feather-jl/branch/master
 
 [codecov-img]: https://codecov.io/gh/JuliaStats/Feather.jl/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaStats/Feather.jl

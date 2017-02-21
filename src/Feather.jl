@@ -78,8 +78,15 @@ type Source <: Data.Source
 end
 
 # reading feather files
-function Source(file::AbstractString; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true)
+if is_windows()
+    const should_use_mmap = false
+else
+    const should_use_mmap = true
+end
+
+function Source(file::AbstractString; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=should_use_mmap)
     # validity checks
+    @show should_use_mmap
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
     m = use_mmap ? Mmap.mmap(file) : Base.read(file)
     length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format: total length of file = $(length(m))"))

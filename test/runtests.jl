@@ -134,5 +134,8 @@ for i = 1:size(df, 2)
 end
 
 if !is_windows()
+if VERSION < v"0.6.0"
+    workspace()
+end
 include("datastreams.jl")
 end

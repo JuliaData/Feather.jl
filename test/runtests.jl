@@ -134,8 +134,5 @@ for i = 1:size(df, 2)
 end
 
 if !is_windows()
-# needed until #265 is resolved
-workspace()
-
 include("datastreams.jl")
 end

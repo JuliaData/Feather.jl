@@ -1,9 +1,5 @@
 module Metadata
 
-if !isdefined(Core, :String)
-    typealias String UTF8String
-end
-
 using FlatBuffers
 
 @enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
@@ -31,7 +27,7 @@ type CategoryMetadata
     ordered::Bool
 end
 
-@default CategoryMetadata ordered=false
+@DEFAULT CategoryMetadata ordered=false
 
 type TimestampMetadata
     unit::TimeUnit
@@ -45,7 +41,7 @@ type TimeMetadata
     unit::TimeUnit
 end
 
-@union TypeMetadata Union{Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata}
+@UNION TypeMetadata Union{Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata}
 
 type Column
     name::String

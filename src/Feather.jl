@@ -345,7 +345,7 @@ function writenulls(io, A::NullableVector, null_count, len, total_bytes)
     # write out null bitmask
     if null_count > 0
         null_bytes = Feather.bytes_for_bits(len)
-        bytes = BitArray(!A.isnull)
+        bytes = BitArray(map(!, A.isnull))
         total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes
@@ -354,7 +354,7 @@ function writenulls{T <: NullableCategoricalArray}(io, A::T, null_count, len, to
     # write out null bitmask
     if null_count > 0
         null_bytes = Feather.bytes_for_bits(len)
-        bytes = BitArray(!(A.refs .== 0))
+        bytes = BitArray(map(!, A.refs .== 0))
         total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes

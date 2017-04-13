@@ -65,6 +65,15 @@ schematype{T}(::Type{T}, nullcount, nullable, wrs) = (nullcount == 0 && !nullabl
 schematype{T <: AbstractString}(::Type{T}, nullcount, nullable, wrs) = wrs ? NullableVector{WeakRefString{UInt8}} : NullableVector{String}
 schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
 
+# TODO these are a horrible hack, find out how to fix!!!
+function Base.convert(::Type{Bool}, b::Feather.Arrow.Bool)
+    Feather.transform!(Bool, [b], 1)[1]
+end
+function Base.convert(::Type{Nullable{Bool}}, b::Feather.Arrow.Bool)
+    Nullable{Bool}(convert(Bool, b))
+end
+
+
 # DataStreams interface types
 type Source <: Data.Source
     path::String
@@ -129,14 +138,70 @@ vectortype{T}(::Type{Nullable{T}}) = NullableVector{T}
 vectortype{S, R}(::Type{CategoricalValue{S, R}}) = CategoricalVector{S, R}
 vectortype{S, R}(::Type{Nullable{CategoricalValue{S, R}}}) = NullableCategoricalVector{S, R}
 
-function Data.streamfrom{T}(source::Source, ::Type{Data.Field}, ::Type{T}, row, col)
-    !isassigned(source.columns, col) && (source.columns[col] = Data.streamfrom(source, Data.Column, vectortype(T), col))
-    return source.columns[col][row]::T
-end
-
 checknonull(source, col) = source.ctable.columns[col].values.null_count > 0 && throw(NullException)
 getbools(s::Source, col) = s.ctable.columns[col].values.null_count == 0 ? zeros(Bool, s.ctable.num_rows) : Bool[getbit(s.data[s.ctable.columns[col].values.offset + bytes_for_bits(x)], mod1(x, 8)) for x = 1:s.ctable.num_rows]
+function getbool(s::Feather.Source, row::Integer, col::Integer)::Bool
+    if s.ctable.columns[col].values.null_count == 0
+        return false
+    end
 
+    addr = s.ctable.columns[col].values.offset + Feather.bytes_for_bits(row)
+    Feather.getbit(s.data[addr], mod1(row,8))
+end
+
+# these functions for usafe_loading of individual fields
+function unload_nocheck{T}(s::Feather.Source, ::Type{T}, row::Integer, col::Integer, off::Integer=0)
+    bitmask_bytes = if s.ctable.columns[col].values.null_count > 0
+        Feather.getoutputlength(s.ctable.version, Feather.bytes_for_bits(s.ctable.num_rows))
+    else
+        0
+    end
+
+    ptr = pointer(s.data) + s.ctable.columns[col].values.offset + bitmask_bytes + (row-1)*sizeof(T)
+    ptr = convert(Ptr{T}, ptr)
+    unsafe_load(ptr)
+end
+function unload{T}(s::Feather.Source, ::Type{T}, row::Integer, col::Integer, off::Integer=0)
+    # we put this check here for maximum safety
+    !(1 ≤ row ≤ s.ctable.num_rows) && throw(BoundsError("Feather Column $col", row))
+    unload_nocheck(s, T, row, col, off)
+end
+
+# these functions for loading of individual strings
+function _unload_string(s::Feather.Source, row::Integer, col::Integer)
+    # we put this here for maximum safety
+    !(1 ≤ row ≤ s.ctable.num_rows) && throw(BoundsError("Feather Column $col", row))
+
+    string_start = unload_nocheck(s, Int32, row, col)
+    string_end = unload_nocheck(s, Int32, row+1, col)
+    string_length = string_end - string_start
+
+    offsets_size = (s.ctable.num_rows+1)*sizeof(Int32)
+    off = Feather.getoutputlength(s.ctable.version, offsets_size)
+
+    values = Feather.unwrap(s, UInt8, col, string_length, off+string_start)
+    unsafe_string(pointer(values), string_length)
+end
+function _get_weakrefstring(s::Feather.Source, row::Integer, col::Integer)
+    # we put this here for maximum safety
+    !(1 ≤ row ≤ s.ctable.num_rows) && throw(BoundsError("Feather Column $col", row))
+    string_start = unload_nocheck(s, Int32, row, col)
+    string_end = unload_nocheck(s, Int32, row+1, col)
+    string_length = string_end - string_start
+
+    offsets_size = (s.ctable.num_rows+1)*sizeof(Int32)
+    off = Feather.getoutputlength(s.ctable.version, offsets_size)
+    off += s.ctable.columns[col].values.offset
+    if s.ctable.columns[col].values.null_count > 0
+        off += Feather.getoutputlength(s.ctable.version, Feather.bytes_for_bits(s.ctable.num_rows))
+    end
+
+    ptr = pointer(s.data, off + string_start + 1)
+    WeakRefString(ptr, string_length)
+end
+
+
+# this function for unsafe_wrap of a vector
 function unwrap{T}(s::Source, ::Type{T}, col, rows, off=0)
     bitmask_bytes = s.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(s.ctable.version, Feather.bytes_for_bits(s.ctable.num_rows)) : 0
     return unsafe_wrap(Array, convert(Ptr{T}, pointer(s.data) + s.ctable.columns[col].values.offset + bitmask_bytes + off), rows)::Vector{T}
@@ -152,11 +217,38 @@ function transform!(::Type{Bool}, A, len)
     return convert(Vector{Bool}, B)
 end
 
+
+# Data.streamfrom Data.Field
+function Data.streamfrom{T<:AbstractString}(s::Feather.Source, ::Type{Data.Field}, ::Type{T},
+                                            row::Integer, col::Integer)
+    Feather.checknonull(s, col)
+    str = _unload_string(s, row, col)
+    convert(T, str)
+end
+
+function Data.streamfrom{T<:AbstractString}(s::Feather.Source, ::Type{Data.Field}, ::Type{Nullable{T}},
+                                            row::Integer, col::Integer)
+    getbool(s,row,col) ? Nullable{T}() : convert(T, _unload_string(s, row, col))
+end
+# one uses these at their own peril in case the data goes out of scope
+function Data.streamfrom(s::Feather.Source, ::Type{Data.Field}, ::Type{Nullable{WeakRefString{UInt8}}},
+                         row::Integer, col::Integer)
+    if getbool(s, row, col)
+        Nullable{WeakRefString{UInt8}}()
+    end
+    Nullable{WeakRefString{UInt8}}(_get_weakrefstring(s, row, col))
+end
+function Data.streamfrom(s::Feather.Source, ::Type{Data.Field}, ::Type{WeakRefString{UInt8}},
+                         row::Integer, col::Integer)
+    _get_weakrefstring(s, row, col)
+end
 function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{T}, col)
     checknonull(source, col)
     A = unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)
     return transform!(eltype(T), A, source.ctable.num_rows)::T
 end
+
+# # Data.streamfrom Data.Column
 function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
     A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)::Vector{T}
     bools = getbools(source, col)

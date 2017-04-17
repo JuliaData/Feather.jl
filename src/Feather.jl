@@ -66,10 +66,10 @@ schematype{T <: AbstractString}(::Type{T}, nullcount, nullable, wrs) = wrs ? Nul
 schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
 
 # TODO these are a horrible hack, find out how to fix!!!
-function Base.convert(::Type{Bool}, b::Feather.Arrow.Bool)
+function Base.convert(::Type{Bool}, b::Arrow.Bool)
     Feather.transform!(Bool, [b], 1)[1]
 end
-function Base.convert(::Type{Nullable{Bool}}, b::Feather.Arrow.Bool)
+function Base.convert(::Type{Nullable{Bool}}, b::Arrow.Bool)
     Nullable{Bool}(convert(Bool, b))
 end
 
@@ -218,7 +218,21 @@ function transform!(::Type{Bool}, A, len)
 end
 
 
-# Data.streamfrom Data.Field
+# # Data.streamfrom Data.Field
+function Data.streamfrom{T}(s::Feather.Source, ::Type{Data.Field}, ::Type{T},
+                            row::Integer, col::Integer)
+    Feather.checknonull(s, col)
+    x = unload(s, s.feathertypes[col], row, col)
+    convert(T, x)
+end
+function Data.streamfrom{T}(s::Feather.Source, ::Type{Data.Field}, ::Type{Nullable{T}},
+                            row::Integer, col::Integer)
+    if getbool(s, row, col)
+        return Nullable{T}()
+    end
+    x = unload(s, s.feathertypes[col], row, col)
+    convert(Nullable{T}, x)
+end
 function Data.streamfrom{T<:AbstractString}(s::Feather.Source, ::Type{Data.Field}, ::Type{T},
                                             row::Integer, col::Integer)
     Feather.checknonull(s, col)
@@ -228,7 +242,7 @@ end
 
 function Data.streamfrom{T<:AbstractString}(s::Feather.Source, ::Type{Data.Field}, ::Type{Nullable{T}},
                                             row::Integer, col::Integer)
-    getbool(s,row,col) ? Nullable{T}() : convert(T, _unload_string(s, row, col))
+    getbool(s,row,col) ? Nullable{T}() : convert(Nullable{T}, _unload_string(s, row, col))
 end
 # one uses these at their own peril in case the data goes out of scope
 function Data.streamfrom(s::Feather.Source, ::Type{Data.Field}, ::Type{Nullable{WeakRefString{UInt8}}},
@@ -242,13 +256,14 @@ function Data.streamfrom(s::Feather.Source, ::Type{Data.Field}, ::Type{WeakRefSt
                          row::Integer, col::Integer)
     _get_weakrefstring(s, row, col)
 end
+
+
+# # Data.streamfrom Data.Column
 function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{T}, col)
     checknonull(source, col)
     A = unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)
     return transform!(eltype(T), A, source.ctable.num_rows)::T
 end
-
-# # Data.streamfrom Data.Column
 function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
     A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)::Vector{T}
     bools = getbools(source, col)
@@ -299,6 +314,7 @@ function Data.streamfrom{T,R}(source::Source, ::Type{Data.Column}, ::Type{Nullab
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return NullableCategoricalArray{String,1,R}(refs, pool)
 end
+
 
 """
 `Feather.read{T <: Data.Sink}(file, sink_type::Type{T}, sink_args...; weakrefstrings::Bool=true)` => `T`

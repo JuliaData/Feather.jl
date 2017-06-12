@@ -1,4 +1,4 @@
-using Feather, DataFrames, Base.Test, DataArrays, NullableArrays, WeakRefStrings
+using Feather, Base.Test, Nulls, WeakRefStrings
 
 testdir = joinpath(dirname(@__FILE__), "data")
 testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -16,7 +16,8 @@ temps = []
 
 for f in files
     source = Feather.Source(f)
-    df = Data.stream!(source, DataFrame)
+    df = Feather.read(source)
+    df = Data.stream!(source, NamedTuple)
     temp = tempname()
     push!(temps, temp)
     sink = Feather.Sink(temp)

@@ -1,12 +1,10 @@
 module Feather
 
-using FlatBuffers, DataStreams, DataFrames, NullableArrays, CategoricalArrays, WeakRefStrings
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams
 
-using DataArrays
+export Data
 
-export Data, DataFrame
-
-# because there's currently not a better place for this to live
+# because there's currently not a better place for these to live
 import Base.==
 =={T}(x::WeakRefString{T}, y::CategoricalArrays.CategoricalValue) = String(x) == String(y)
 =={T}(y::CategoricalArrays.CategoricalValue, x::WeakRefString{T}) = String(x) == String(y)
@@ -61,20 +59,20 @@ function addlevels!{T <: CategoricalValue}(::Type{T}, catlevels, orders, i, meta
     return
 end
 
-schematype{T}(::Type{T}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? Vector{T} : NullableVector{T}
-schematype{T <: AbstractString}(::Type{T}, nullcount, nullable, wrs) = wrs ? NullableVector{WeakRefString{UInt8}} : NullableVector{String}
-schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? CategoricalVector{T, R} : NullableCategoricalVector{T, R}
+schematype{T}(::Type{T}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? T : Union{T, Null}
+schematype{T <: AbstractString}(::Type{T}, nullcount, nullable, wrs) = wrs ? ?WeakRefString{UInt8} : ?String
+schematype{T, R}(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) = (nullcount == 0 && !nullable) ? CategoricalValue{T, R} : CategoricalValue{Union{T, Null}, R}
 
 # DataStreams interface types
-type Source <: Data.Source
+mutable struct Source{T} <: Data.Source
     path::String
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
-    feathertypes::Vector{DataType} # separate from the types in schema, since we need to convert between feather storage types & julia types
+    feathertypes::Vector{Type} # separate from the types in schema, since we need to convert between feather storage types & julia types
     levels::Dict{Int,Vector{String}}
     orders::Dict{Int,Bool}
-    columns::Vector{Any} # holds references to pre-fetched columns for Data.getfield
+    columns::T # holds references to pre-fetched columns for Data.getfield
 end
 
 # reading feather files
@@ -98,8 +96,8 @@ function Source(file::AbstractString; nullable::Bool=true, weakrefstrings::Bool=
     ctable = FlatBuffers.read(Metadata.CTable, m, metapos + rootpos - 1)
     ctable.version < VERSION && warn("This Feather file is old and will not be readable beyond the 0.3.0 release")
     header = String[]
-    types = DataType[]
-    juliatypes = DataType[]
+    types = Type[]
+    juliatypes = Type[]
     columns = ctable.columns
     levels = Dict{Int,Vector{String}}()
     orders = Dict{Int,Bool}()
@@ -115,7 +113,7 @@ function Source(file::AbstractString; nullable::Bool=true, weakrefstrings::Bool=
 end
 
 # DataStreams interface
-Data.schema(source::Feather.Source, ::Type{Data.Column}) = source.schema
+Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
 function Data.isdone(io::Feather.Source, row, col)
     rows, cols = size(Data.schema(io))
@@ -124,13 +122,13 @@ end
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Column}) = true
 Data.streamtype{T<:Feather.Source}(::Type{T}, ::Type{Data.Field}) = true
 
-vectortype{T}(::Type{T}) = Vector{T}
-vectortype{T}(::Type{Nullable{T}}) = NullableVector{T}
-vectortype{S, R}(::Type{CategoricalValue{S, R}}) = CategoricalVector{S, R}
-vectortype{S, R}(::Type{Nullable{CategoricalValue{S, R}}}) = NullableCategoricalVector{S, R}
+# vectortype{T}(::Type{T}) = Vector{T}
+# vectortype{T}(::Type{Nullable{T}}) = NullableVector{T}
+# vectortype{S, R}(::Type{CategoricalValue{S, R}}) = CategoricalVector{S, R}
+# vectortype{S, R}(::Type{Nullable{CategoricalValue{S, R}}}) = NullableCategoricalVector{S, R}
 
 function Data.streamfrom{T}(source::Source, ::Type{Data.Field}, ::Type{T}, row, col)
-    !isassigned(source.columns, col) && (source.columns[col] = Data.streamfrom(source, Data.Column, vectortype(T), col))
+    !isassigned(source.columns, col) && (source.columns[col] = Data.streamfrom(source, Data.Column, T, col))
     return source.columns[col][row]::T
 end
 
@@ -155,57 +153,59 @@ end
 function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{T}, col)
     checknonull(source, col)
     A = unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)
-    return transform!(eltype(T), A, source.ctable.num_rows)::T
+    return transform!(T, A, source.ctable.num_rows)
 end
-function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
-    A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)::Vector{T}
+function Data.streamfrom{T}(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, col)
+    A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
-    return NullableArray{T,1}(A, bools, source.data)
+    V = Vector{Union{T, Null}}(A)
+    foreach(x->bools[x] && (V[x] = null), 1:length(A))
+    return V
 end
 function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Vector{Bool}}, col)
     checknonull(source, col)
     A = unwrap(source, source.feathertypes[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
     return transform!(Bool, A, source.ctable.num_rows)::Vector{Bool}
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{Bool}}, col)
-    bools = getbools(source, col)
-    A = transform!(Bool, unwrap(source, source.feathertypes[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8))), source.ctable.num_rows)
-    return NullableArray{Bool, 1}(A, bools)
-end
+# function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{Bool}}, col)
+#     bools = getbools(source, col)
+#     A = transform!(Bool, unwrap(source, source.feathertypes[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8))), source.ctable.num_rows)
+#     return NullableArray{Bool, 1}(A, bools)
+# end
 function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column}, ::Type{Vector{T}}, col)
     checknonull(source, col)
     offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     return T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
-function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
-    bools = getbools(source, col)
-    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
-    A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
-    return NullableArray{T, 1}(A, bools)
-end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{WeakRefString{UInt8}}}, col)
-    offsets = Feather.unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    offset = source.ctable.columns[col].values.offset +
-             (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
-             getoutputlength(source.ctable.version, sizeof(offsets))
-    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
-    bools = getbools(source, col)
-    return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
-end
-function Data.streamfrom{T,R}(source::Source, ::Type{Data.Column}, ::Type{CategoricalVector{T,R}}, col)
+# function Data.streamfrom{T <: AbstractString}(source::Source, ::Type{Data.Column}, ::Type{NullableVector{T}}, col)
+#     bools = getbools(source, col)
+#     offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+#     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+#     A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
+#     return NullableArray{T, 1}(A, bools)
+# end
+# function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{WeakRefString{UInt8}}}, col)
+#     offsets = Feather.unwrap(source, Int32, col, source.ctable.num_rows + 1)
+#     offset = source.ctable.columns[col].values.offset +
+#              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+#              getoutputlength(source.ctable.version, sizeof(offsets))
+#     A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+#     bools = getbools(source, col)
+#     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
+# end
+function Data.streamfrom{T,R}(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, col)
     checknonull(source, col)
     refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return CategoricalArray{String,1,R}(refs, pool)
 end
-function Data.streamfrom{T,R}(source::Source, ::Type{Data.Column}, ::Type{NullableCategoricalVector{T,R}}, col)
+function Data.streamfrom{T,R}(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, col)
     refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
-    return NullableCategoricalArray{String,1,R}(refs, pool)
+    return CategoricalArray{String,1,R}(refs, pool)
 end
 
 """
@@ -214,7 +214,7 @@ end
 `Feather.read(file, sink::Data.Sink; weakrefstrings::Bool=true)` => `Data.Sink`
 
 `Feather.read` takes a feather-formatted binary `file` argument and "streams" the data to the
-provided `sink` argument, a `DataFrame` by default. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
+provided `sink` argument, a `NamedTuple` by default. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
 or a Sink can be constructed "on the fly" by providing the type of Sink and any necessary positional arguments
 (the 1st method above).
 
@@ -229,7 +229,7 @@ Keyword arguments:
 Examples:
 
 ```julia
-# default read method, returns a DataFrame
+# default read method, returns a NamedTuple
 df = Feather.read("cool_feather_file.feather")
 
 # read a feather file directly into a SQLite database table
@@ -239,20 +239,20 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, append, transforms, args...)
+function read(file::AbstractString, sink=NamedTuple, args...; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, args...; append=append, transforms=transforms)
     Data.close!(sink)
     return sink
 end
 
 function read{T}(file::AbstractString, sink::T; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
-    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, append, transforms)
+    sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink; append=append, transforms=transforms)
     Data.close!(sink)
     return sink
 end
 
-read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, append, transforms, args...); Data.close!(sink); return sink)
-read{T}(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, append, transforms); Data.close!(sink); return sink)
+read(source::Feather.Source, sink=NamedTuple, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); Data.close!(sink); return sink)
+read{T}(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink; append=append, transforms=transforms); Data.close!(sink); return sink)
 
 # writing feather files
 feathertype{T}(::Type{T}) = Feather.julia2Type_[T]
@@ -282,15 +282,15 @@ function getmetadata{S,R}(io, T::Type{CategoricalValue{S,R}}, A)
 end
 
 values(A::Vector) = A
-values(A::NullableVector) = A.values
+# values(A::NullableVector) = A.values
 values{S,R}(A::Union{CategoricalArray{S,1,R},NullableCategoricalArray{S,1,R}}) = map(x-> x - R(1), A.refs)
-values(A::DataArray) = A.data
+# values(A::DataArray) = A.data
 
-nullcount(A::NullableVector) = sum(A.isnull)
+# nullcount(A::NullableVector) = sum(A.isnull)
 nullcount(A::Vector) = 0
 nullcount(A::CategoricalArray) = 0
 nullcount(A::NullableCategoricalArray) = sum(A.refs .== 0)
-nullcount(A::DataArray) = sum(A.na)
+# nullcount(A::DataArray) = sum(A.na)
 
 # Bool
 function writecolumn(io, ::Type{Bool}, A)
@@ -314,10 +314,10 @@ function writecolumn{T}(io, ::Type{T}, A)
 end
 # List types
 valuelength{T}(val::T) = length(String(val))
-valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
+# valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
 
 writevalue{T}(io, val::T) = Base.write(io, Vector{UInt8}(String(val)))
-writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
+# writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)
     len = length(arr)
@@ -341,15 +341,15 @@ function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)
 end
 
 writenulls(io, A, null_count, len, total_bytes) = return total_bytes
-function writenulls(io, A::NullableVector, null_count, len, total_bytes)
-    # write out null bitmask
-    if null_count > 0
-        null_bytes = Feather.bytes_for_bits(len)
-        bytes = BitArray(map(!, A.isnull))
-        total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
-    end
-    return total_bytes
-end
+# function writenulls(io, A::NullableVector, null_count, len, total_bytes)
+#     # write out null bitmask
+#     if null_count > 0
+#         null_bytes = Feather.bytes_for_bits(len)
+#         bytes = BitArray(map(!, A.isnull))
+#         total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
+#     end
+#     return total_bytes
+# end
 function writenulls{T <: NullableCategoricalArray}(io, A::T, null_count, len, total_bytes)
     # write out null bitmask
     if null_count > 0
@@ -359,35 +359,35 @@ function writenulls{T <: NullableCategoricalArray}(io, A::T, null_count, len, to
     end
     return total_bytes
 end
-function writenulls(io, A::DataArray, null_count, len, total_bytes)
-    # write out null bitmask
-    if null_count > 0
-        null_bytes = Feather.bytes_for_bits(len)
-        bytes = BitArray(!A.na)
-        total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
-    end
-    return total_bytes
-end
+# function writenulls(io, A::DataArray, null_count, len, total_bytes)
+#     # write out null bitmask
+#     if null_count > 0
+#         null_bytes = Feather.bytes_for_bits(len)
+#         bytes = BitArray(!A.na)
+#         total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
+#     end
+#     return total_bytes
+# end
 
 "DataStreams Sink implementation for feather-formatted binary files"
-type Sink <: Data.Sink
+mutable struct Sink <: Data.Sink
     ctable::Metadata.CTable
     file::String
     io::IOBuffer
     description::String
     metadata::String
-    df::DataFrame
+    df::NamedTuple
 end
 
-function renullify(A::NullableVector{WeakRefString{UInt8}})
-    if !isempty(A.parent)
-        parent = copy(A.parent)
-        B = [WeakRefString(pointer(parent, x.ind), x.len, x.ind) for x in A.values]
-        return NullableArray{WeakRefString{UInt8}, 1}(B, A.isnull, parent)
-    else
-        return A
-    end
-end
+# function renullify(A::NullableVector{WeakRefString{UInt8}})
+#     if !isempty(A.parent)
+#         parent = copy(A.parent)
+#         B = [WeakRefString(pointer(parent, x.ind), x.len, x.ind) for x in A.values]
+#         return NullableArray{WeakRefString{UInt8}, 1}(B, A.isnull, parent)
+#     else
+#         return A
+#     end
+# end
 
 function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column;
               description::AbstractString="", metadata::AbstractString="", append::Bool=false)
@@ -400,7 +400,7 @@ function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data
         end
         schema.rows += size(df, 1)
     else
-        df = DataFrame(schema, T)
+        df = NamedTuple(schema, T)
     end
     io = IOBuffer()
     Feather.writepadded(io, FEATHER_MAGIC_BYTES)
@@ -418,7 +418,7 @@ function Sink{T}(sink, sch::Data.Schema, ::Type{T}, append::Bool, ref::Vector{UI
         for col in sink.df.columns
             empty!(col)
         end
-        sink.df = DataFrame(sch, T)
+        sink.df = NamedTuple(sch, T)
     else
         sch.rows += size(sink.df, 1)
     end
@@ -486,7 +486,7 @@ Keyword arguments:
 Examples:
 
 ```julia
-df = DataFrame(...)
+df = NamedTuple(...)
 Feather.write("shiny_new_feather_file.feather", df)
 
 Feather.write("sqlite_query_result.feather", SQLite.Source, db, "select * from cool_table")

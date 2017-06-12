@@ -13,7 +13,7 @@ using FlatBuffers
 
 # FlatBuffers.enumsizeof(::Type{TimeUnit}) = UInt8
 
-type PrimitiveArray
+mutable struct PrimitiveArray
     type_::Type_
     encoding::Encoding
     offset::Int64
@@ -22,28 +22,28 @@ type PrimitiveArray
     total_bytes::Int64
 end
 
-type CategoryMetadata
+mutable struct CategoryMetadata
     levels::PrimitiveArray
     ordered::Bool
 end
 
 @DEFAULT CategoryMetadata ordered=false
 
-type TimestampMetadata
+mutable struct TimestampMetadata
     unit::TimeUnit
     timezone::String
 end
 
-type DateMetadata
+mutable struct DateMetadata
 end
 
-type TimeMetadata
+mutable struct TimeMetadata
     unit::TimeUnit
 end
 
 @UNION TypeMetadata Union{Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata}
 
-type Column
+mutable struct Column
     name::String
     values::PrimitiveArray
     metadata_type::Int8
@@ -55,7 +55,7 @@ function Column(name::String, values::PrimitiveArray, metadata::TypeMetadata=not
     return Column(name, values, FlatBuffers.typeorder(TypeMetadata, typeof(metadata)), metadata, user_metadata)
 end
 
-type CTable
+mutable struct CTable
     description::String
     num_rows::Int64
     columns::Vector{Column}

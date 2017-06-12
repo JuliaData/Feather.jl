@@ -1,17 +1,17 @@
 module Arrow
 
-immutable Bool
+struct Bool
     value::UInt64
 end
 
 # Time types
-immutable Second end
-immutable Millisecond end
-immutable Microsecond end
-immutable Nanosecond end
+struct Second end
+struct Millisecond end
+struct Microsecond end
+struct Nanosecond end
 
 # Timestamp type with time unit `P` and timezone `Z`
-immutable Timestamp{P,Z}
+struct Timestamp{P,Z}
     value::Int64
 end
 
@@ -31,7 +31,7 @@ datetime2unix(x::DateTime) = Dates.value(x) - UNIXEPOCH_TS
 Base.convert{P,Z}(::Type{DateTime}, x::Timestamp{P,Z}) = unix2datetime(P, x)
 Base.show(io::IO, x::Timestamp) = show(io, convert(DateTime,x))
 
-immutable Date
+struct Date
     value::Int32
 end
 
@@ -46,7 +46,7 @@ Base.convert(::Type{Dates.Date}, x::Arrow.Date) = unix2date(x.value)
 Base.show(io::IO, x::Arrow.Date) = show(io, convert(Dates.Date,x))
 
 # Exact Time type with time unit `P`
-immutable Time{P}
+struct Time{P}
     value::Int64
 end
 

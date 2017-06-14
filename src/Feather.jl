@@ -54,7 +54,8 @@ function addlevels!(::Type{T}, catlevels, orders, i, meta, values_type, data, ve
     ptr = convert(Ptr{Int32}, pointer(data) + meta.levels.offset)
     offsets = [unsafe_load(ptr, i) for i = 1:meta.levels.length + 1]
     ptr += getoutputlength(version, sizeof(offsets))
-    catlevels[i] = map(x->unsafe_string(ptr + offsets[x], offsets[x+1] - offsets[x]), 1:meta.levels.length)
+    ptr2 = convert(Ptr{UInt8}, ptr)
+    catlevels[i] = map(x->unsafe_string(ptr2 + offsets[x], offsets[x+1] - offsets[x]), 1:meta.levels.length)
     orders[i] = meta.ordered
     return
 end
@@ -64,12 +65,12 @@ schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs
 schematype(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalValue{T, R}, CategoricalValue{Union{T, Null}, R})
 
 # DataStreams interface types
-mutable struct Source{T <: NamedTuple} <: Data.Source
+mutable struct Source{S, T <: NamedTuple} <: Data.Source
     path::String
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
-    feathertypes::Vector{Type} # separate from the types in schema, since we need to convert between feather storage types & julia types
+    # ::S # separate from the types in schema, since we need to convert between feather storage types & julia types
     levels::Dict{Int,Vector{String}}
     orders::Dict{Int,Bool}
     columns::T # holds references to pre-fetched columns for Data.getfield
@@ -111,10 +112,14 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
     sch = Data.Schema(header, juliatypes, ctable.num_rows)
     columns = NamedTuple(sch, Data.Column, false)
     # construct Data.Schema and Feather.Source
-    return Source(file, sch, ctable, m, types, levels, orders, columns)
+    return Source{Tuple{types...}, typeof(columns)}(file, sch, ctable, m, levels, orders, columns)
 end
 
 # DataStreams interface
+Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
+Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+Data.allocate(::Type{CategoricalValue{Union{T, Null}, R}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
 function Data.isdone(io::Feather.Source, row, col, rows, cols)
@@ -123,21 +128,21 @@ end
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Column}) = true
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Field}) = true
 
-function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, col) where {T}
-    isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, col))
+function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, ::Type{Val{N}}) where {T, N}
+    isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, row, col))
     return source.columns[col][row]
 end
 
 checknonull(source, col) = source.ctable.columns[col].values.null_count > 0 && throw(NullException)
 getbools(s::Source, col) = s.ctable.columns[col].values.null_count == 0 ? zeros(Bool, s.ctable.num_rows) : Bool[getbit(s.data[s.ctable.columns[col].values.offset + bytes_for_bits(x)], mod1(x, 8)) for x = 1:s.ctable.num_rows]
 
-function unwrap(s::Source, ::Type{T}, col, rows, off=0) where {T}
+@inline function unwrap(s::Source, ::Type{T}, col, rows, off=0) where {T}
     bitmask_bytes = s.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(s.ctable.version, Feather.bytes_for_bits(s.ctable.num_rows)) : 0
     ptr = convert(Ptr{T}, pointer(s.data) + s.ctable.columns[col].values.offset + bitmask_bytes + off)
     return [unsafe_load(ptr, i) for i = 1:rows]
 end
 
-transform!(::Type{T}, A, len) where {T} = T[x for x in A]
+transform!(::Type{T}, A, len) where {T} = A
 transform!(::Type{Date}, A, len) = map(x->Arrow.unix2date(x), A)
 transform!(::Type{DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) where {P, Z} = map(x->Arrow.unix2datetime(P, x), A)
 transform!(::Type{CategoricalValue{T,R}}, A, len) where {T, R} = map(x->x + R(1), A)
@@ -147,59 +152,71 @@ function transform!(::Type{Bool}, A, len)
     return convert(Vector{Bool}, B)
 end
 
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{T}, col) where {T}
-    checknonull(source, col)
-    A = unwrap(source, source.feathertypes[col], col, source.ctable.num_rows)
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{T}, row, ::Type{Val{N}}) where {S, T, N}
+    checknonull(source, N)
+    A = unwrap(source, S.parameters[N], N, source.ctable.num_rows)
     return transform!(T, A, source.ctable.num_rows)
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, col) where {T}
-    A = transform!(T, unwrap(source, source.feathertypes[col], col, source.ctable.num_rows), source.ctable.num_rows)
-    bools = getbools(source, col)
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, ::Type{Val{N}}) where {S, T, N}
+    A = transform!(T, unwrap(source, S.parameters[N], N, source.ctable.num_rows), source.ctable.num_rows)
+    bools = getbools(source, N)
     V = Vector{Union{T, Null}}(A)
     foreach(x->bools[x] && (V[x] = null), 1:length(A))
     return V
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Bool}, col)
-    checknonull(source, col)
-    A = unwrap(source, source.feathertypes[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Bool}, row, ::Type{Val{N}}) where {S, N}
+    checknonull(source, N)
+    A = unwrap(source, S.parameters[N], N, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
     return transform!(Bool, A, source.ctable.num_rows)::Vector{Bool}
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{T}, col) where {T <: AbstractString}
-    checknonull(source, col)
-    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{T}, row, ::Type{Val{N}}) where {T <: AbstractString, N}
+    checknonull(source, N)
+    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
+    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     return T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, col) where {T <: AbstractString}
-    bools = getbools(source, col)
-    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, ::Type{Val{N}}) where {T <: AbstractString, N}
+    bools = getbools(source, N)
+    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
+    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     V = Vector{Union{T, Null}}(A)
     foreach(x->bools[x] && (V[x] = null), 1:length(A))
     return V
 end
-# function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVector{WeakRefString{UInt8}}}, col)
-#     offsets = Feather.unwrap(source, Int32, col, source.ctable.num_rows + 1)
-#     offset = source.ctable.columns[col].values.offset +
-#              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
-#              getoutputlength(source.ctable.version, sizeof(offsets))
-#     A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
-#     bools = getbools(source, col)
-#     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
-# end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, col) where {T, R}
-    checknonull(source, col)
-    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
-    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{WeakRefString{UInt8}}, row, ::Type{Val{N}}) where {N}
+    checknonull(source, N)
+    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
+    offset = source.ctable.columns[N].values.offset +
+             (source.ctable.columns[N].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+             getoutputlength(source.ctable.version, sizeof(offsets))
+    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+    return WeakRefStringArray(source.data, A)
+end
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Null}}, row, ::Type{Val{N}}) where {N}
+    bools = getbools(source, N)
+    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
+    offset = source.ctable.columns[N].values.offset +
+             (source.ctable.columns[N].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+             getoutputlength(source.ctable.version, sizeof(offsets))
+    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    A = (?WeakRefString{UInt8})[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+    foreach(x->bools[x] && (A[x] = null), 1:length(A))
+    return WeakRefStringArray(source.data, A)
+end
+function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, ::Type{Val{N}}) where {T, R, N}
+    checknonull(source, N)
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
+    pool = CategoricalPool{String, R}(source.levels[N], source.orders[N])
     return CategoricalArray{String,1,R}(refs, pool)
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, col) where {T, R}
-    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
-    bools = getbools(source, col)
+function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, ::Type{Val{N}}) where {T, R, N}
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
+    bools = getbools(source, N)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
-    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
-    return CategoricalArray{String,1,R}(refs, pool)
+    pool = CategoricalPool{String, R}(source.levels[N], source.orders[N])
+    return CategoricalArray{Union{String, Null},1,R}(refs, pool)
 end
 
 """
@@ -214,7 +231,7 @@ or a Sink can be constructed "on the fly" by providing the type of Sink and any 
 
 Keyword arguments:
 
-  * `nullable::Bool=true`: will return columns as `NullableVector{T}` types by default, regarldess of # of null values. When set to `false`, columns without null values will be returned as regular `Vector{T}`
+  * `nullable::Bool=false`: will return columns as `NullableVector{T}` types by default, regarldess of # of null values. When set to `false`, columns without null values will be returned as regular `Vector{T}`
   * `weakrefstrings::Bool=true`: indicates whether string-type columns should be returned as `WeakRefString` (for efficiency) or regular `String` types
   * `use_mmap::Bool=true`: indicates whether to use system `mmap` capabilities when reading the feather file; on some systems or environments, mmap may not be available or reliable (virtualbox env using shared directories can be problematic)
   * `append::Bool=false`: indicates whether the feather file should be appended to the provided `sink` argument; note that column types between the feather file and existing sink must match to allow appending
@@ -233,23 +250,22 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=NamedTuple, args...; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+function read(file::AbstractString, sink=NamedTuple, args...; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
     sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, args...; append=append, transforms=transforms)
-    Data.close!(sink)
-    return sink
+    return Data.close!(sink)
 end
 
-function read(file::AbstractString, sink::T; nullable::Bool=true, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T}
+function read(file::AbstractString, sink::T; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T}
     sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink; append=append, transforms=transforms)
-    Data.close!(sink)
-    return sink
+    return Data.close!(sink)
 end
 
-read(source::Feather.Source, sink=NamedTuple, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); Data.close!(sink); return sink)
-read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T} = (sink = Data.stream!(source, sink; append=append, transforms=transforms); Data.close!(sink); return sink)
+read(source::Feather.Source, sink=NamedTuple, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); return Data.close!(sink))
+read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T} = (sink = Data.stream!(source, sink; append=append, transforms=transforms); return Data.close!(sink))
 
 # writing feather files
 feathertype(::Type{T}) where {T} = Feather.julia2Type_[T]
+feathertype(::Type{Union{T, Null}}) where {T} = feathertype(T)
 feathertype(::Type{CategoricalValue{T,R}}) where {T, R} = julia2Type_[R]
 feathertype(::Type{<:Arrow.Time}) = Metadata.INT64
 feathertype(::Type{Date}) = Metadata.INT32
@@ -257,6 +273,7 @@ feathertype(::Type{DateTime}) = Metadata.INT64
 feathertype(::Type{<:AbstractString}) = Metadata.UTF8
 
 getmetadata(io, T, A) = nothing
+getmetadata(io, ::Type{Union{T, Null}}, A) where {T} = getmetadata(io, T, A)
 getmetadata(io, ::Type{Date}, A) = Metadata.DateMetadata()
 getmetadata(io, ::Type{Arrow.Time{T}}, A) where {T} = Metadata.TimeMetadata(julia2TimeUnit[T])
 getmetadata(io, ::Type{DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
@@ -278,7 +295,8 @@ end
 values(A::Vector) = A
 values(A::CategoricalArray{T,1,R}) where {T, R} = map(x-> x - R(1), A.refs)
 
-nullcount(A::Vector) = 0
+nullcount(A) = 0
+nullcount(A::Vector{Union{T, Null}}) where {T} = sum(isnull(x) for x in A)
 nullcount(A::CategoricalArray) = sum(A.refs .== 0)
 
 # Bool
@@ -287,6 +305,9 @@ function writecolumn(io, ::Type{Bool}, A)
 end
 # Category
 function writecolumn(io, ::Type{CategoricalValue{T,R}}, A) where {T, R}
+    return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
+end
+function writecolumn(io, ::Type{Union{CategoricalValue{T,R}, Null}}, A) where {T, R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date
@@ -298,6 +319,7 @@ function writecolumn(io, ::Type{DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
 end
 # other primitive T
+writecolumn(io, ::Type{Union{T, Null}}, A) where {T} = writecolumn(io, T, map(x->ifelse(isnull(x),zero(T),x), A))
 function writecolumn(io, ::Type{T}, A) where {T}
     return writepadded(io, A)
 end
@@ -359,14 +381,12 @@ mutable struct Sink{T <: NamedTuple} <: Data.Sink
     df::T
 end
 
-function Sink{T<:Data.StreamType}(file::Union{AbstractString,NamedTuple}, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column;
+function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column, existing::NamedTuple=NamedTuple();
               description::AbstractString="", metadata::AbstractString="",
-              append::Bool=false, reference::Vector{UInt8}=UInt8[])
-    if file isa NamedTuple
-        df = NamedTuple(schema, T, append, file; reference=reference)
-        fl = ""
+              append::Bool=false, reference::Vector{UInt8}=UInt8[],)
+    if !isempty(existing)
+        df = NamedTuple(schema, T, append, existing; reference=reference)
     else
-        fl = file
         if append
             df = Feather.read(file)
         else
@@ -378,7 +398,7 @@ function Sink{T<:Data.StreamType}(file::Union{AbstractString,NamedTuple}, schema
     end
     io = IOBuffer()
     Feather.writepadded(io, FEATHER_MAGIC_BYTES)
-    return Sink(Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), fl, io, description, metadata, df)
+    return Sink(Metadata.CTable("", 0, Metadata.Column[], VERSION, ""), file, io, description, metadata, df)
 end
 
 # DataStreams interface
@@ -388,7 +408,7 @@ function Sink{T}(sch::Data.Schema, ::Type{T}, append::Bool, file::AbstractString
 end
 
 function (::Type{S})(sink, sch::Data.Schema, ::Type{T}, append::Bool; reference::Vector{UInt8}=UInt8[]) where {S <: Sink, T}
-    sink = Sink(sink.df, sch, T; append=append, reference=reference)
+    sink = Sink(sink.file, sch, T, sink.df; append=append, reference=reference)
     return sink
 end
 

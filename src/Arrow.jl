@@ -36,10 +36,11 @@ immutable Date
 end
 
 const UNIXEPOCH_DT = Dates.value(Dates.Date(1970))
-function unix2date(x)
-    rata = UNIXEPOCH_DT + x.value
+function unix2date(x::Integer)
+    rata = UNIXEPOCH_DT + x
     return Dates.Date(Dates.UTD(rata))
 end
+unix2date(x::Arrow.Date) = unix2date(x.value)
 date2unix(x::Dates.Date) = (Dates.value(x) - UNIXEPOCH_DT) % Int32
 
 Base.convert(::Type{Dates.Date}, x::Arrow.Date) = unix2date(x.value)

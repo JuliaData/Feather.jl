@@ -111,6 +111,7 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
     end
     sch = Data.Schema(header, juliatypes, ctable.num_rows)
     columns = NamedTuple(sch, Data.Column, false)
+    sch.rows = ctable.num_rows
     # construct Data.Schema and Feather.Source
     return Source{Tuple{types...}, typeof(columns)}(file, sch, ctable, m, levels, orders, columns)
 end
@@ -118,17 +119,18 @@ end
 # DataStreams interface
 Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
 Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
-Data.allocate(::Type{CategoricalValue{Union{T, Null}, R}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
-function Data.isdone(io::Feather.Source, row, col, rows, cols)
-    return col > cols || row > rows
+Data.isdone(io::Feather.Source, row, col, rows, cols) =  col > cols || row > rows
+function Data.isdone(io::Source, row, col)
+    rows, cols = size(Data.schema(io))
+    return isdone(io, row, col, rows, cols)
 end
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Column}) = true
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Field}) = true
 
-function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, ::Type{Val{N}}) where {T, N}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, ::Type{Val{N}}) where {T, N}
     isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, row, col))
     return source.columns[col][row]
 end
@@ -205,13 +207,13 @@ end
     foreach(x->bools[x] && (A[x] = null), 1:length(A))
     return WeakRefStringArray(source.data, A)
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, ::Type{Val{N}}) where {T, R, N}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, ::Type{Val{N}}) where {T, R, N}
     checknonull(source, N)
     refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
     pool = CategoricalPool{String, R}(source.levels[N], source.orders[N])
     return CategoricalArray{String,1,R}(refs, pool)
 end
-function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, ::Type{Val{N}}) where {T, R, N}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, ::Type{Val{N}}) where {T, R, N}
     refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, N)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
@@ -415,8 +417,8 @@ end
 Data.streamtypes(::Type{<:Feather.Sink}) = [Data.Column, Data.Field]
 Data.weakrefstrings(::Type{<:Feather.Sink}) = true
 
-Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col, sch) where {T} = Data.streamto!(sink.df, Data.Field, val, row, col, sch)
-Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col, sch) where {T} = Data.streamto!(sink.df, Data.Column, column, row, col, sch)
+Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col::Type{Val{N}}, kr::Type{Val{S}}) where {T, N, S} = Data.streamto!(sink.df, Data.Field, val, row, col, kr)
+Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col::Type{Val{N}}, kr::Type{Val{S}}) where {T, N, S} = Data.streamto!(sink.df, Data.Column, column, row, col, kr)
 
 function Data.close!(sink::Feather.Sink)
     sch = Data.schema(sink.df)

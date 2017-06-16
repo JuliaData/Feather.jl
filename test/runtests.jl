@@ -1,4 +1,4 @@
-using Feather, Base.Test, Nulls, WeakRefStrings
+using Feather, Base.Test, Nulls, WeakRefStrings, CategoricalArrays
 
 # testdir = joinpath(dirname(@__FILE__), "data")
 # testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -68,45 +68,48 @@ run(`docker pull quinnj/feather:$DOCKERTAG`)
 println("Create docker container from feather image...")
 run(`docker run -it -d --name feathertest quinnj/feather:$DOCKERTAG /bin/sh`)
 
-println("Generate a test.feather file from python...")
-run(`docker cp runtests.py feathertest:/home/runtests.py`)
-run(`docker exec feathertest python /home/runtests.py`)
+try
+    println("Generate a test.feather file from python...")
+    run(`docker cp runtests.py feathertest:/home/runtests.py`)
+    run(`docker exec feathertest python /home/runtests.py`)
 
-println("Read test.feather into julia...")
-run(`docker cp feathertest:/home/test.feather test.feather`)
-df = Feather.read("test.feather")
+    println("Read test.feather into julia...")
+    run(`docker cp feathertest:/home/test.feather test.feather`)
+    df = Feather.read("test.feather")
 
-@test df[:Autf8] == ["hey","there","sailor"]
-@test df[:Abool] == [true, true, false]
-@test df[:Acat] == CategoricalArray(["a","b","c"])
-@test df[:Acatordered] == CategoricalArray(["d","e","f"])
-@test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-@test df[:Afloat32] == [1.0, null, 0.0]
-@test df[:Afloat64] == [Inf,1.0,0.0]
+    @test df[:Autf8] == ["hey","there","sailor"]
+    @test df[:Abool] == [true, true, false]
+    @test df[:Acat] == CategoricalArray(["a","b","c"])
+    @test df[:Acatordered] == CategoricalArray(["d","e","f"])
+    @test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+    @test df[:Afloat32] == [1.0, null, 0.0]
+    @test df[:Afloat64] == [Inf,1.0,0.0]
 
-df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
+    df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
 
-println("Writing test2.feather from julia...")
-Feather.write("test2.feather", df)
-df2 = Feather.read("test2.feather")
+    println("Writing test2.feather from julia...")
+    Feather.write("test2.feather", df)
+    df2 = Feather.read("test2.feather")
 
-@test df2[:Autf8] == ["hey","there","sailor"]
-@test df2[:Abool] == [true, true, false]
-@test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
-@test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
-@test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-@test df2[:Afloat32] == [1.0, null, 0.0]
-@test df2[:Afloat64] == [Inf,1.0,0.0]
+    @test df2[:Autf8] == ["hey","there","sailor"]
+    @test df2[:Abool] == [true, true, false]
+    @test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
+    @test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
+    @test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+    @test df2[:Afloat32] == [1.0, null, 0.0]
+    @test df2[:Afloat64] == [Inf,1.0,0.0]
 
-println("Read test2.feather into python...")
-run(`docker cp test2.feather feathertest:/home/test2.feather`)
-run(`docker cp runtests2.py feathertest:/home/runtests2.py`)
-run(`docker exec feathertest python /home/runtests2.py`)
+    println("Read test2.feather into python...")
+    run(`docker cp test2.feather feathertest:/home/test2.feather`)
+    run(`docker cp runtests2.py feathertest:/home/runtests2.py`)
+    run(`docker exec feathertest python /home/runtests2.py`)
+finally
 
-run(`docker stop feathertest`)
-run(`docker rm feathertest`)
-rm("test.feather")
-rm("test2.feather")
+    run(`docker stop feathertest`)
+    run(`docker rm feathertest`)
+    rm("test.feather")
+    rm("test2.feather")
+end
 
 end
 

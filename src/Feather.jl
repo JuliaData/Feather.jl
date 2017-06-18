@@ -109,7 +109,7 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
         addlevels!(jl, levels, orders, i, col.metadata, col.values.type_, m, ctable.version)
         push!(juliatypes, schematype(jl, col.values.null_count, nullable, weakrefstrings))
     end
-    sch = Data.Schema(header, juliatypes, ctable.num_rows)
+    sch = Data.Schema(juliatypes, header, ctable.num_rows)
     columns = NamedTuple(sch, Data.Column, false)
     sch.rows = ctable.num_rows
     # construct Data.Schema and Feather.Source
@@ -130,7 +130,7 @@ end
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Column}) = true
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Field}) = true
 
-@inline function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, ::Type{Val{N}}) where {T, N}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, col) where {T}
     isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, row, col))
     return source.columns[col][row]
 end
@@ -154,70 +154,70 @@ function transform!(::Type{Bool}, A, len)
     return convert(Vector{Bool}, B)
 end
 
-@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{T}, row, ::Type{Val{N}}) where {S, T, N}
-    checknonull(source, N)
-    A = unwrap(source, S.parameters[N], N, source.ctable.num_rows)
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{T}, row, col) where {S, T}
+    checknonull(source, col)
+    A = unwrap(source, S.parameters[col], col, source.ctable.num_rows)
     return transform!(T, A, source.ctable.num_rows)
 end
-@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, ::Type{Val{N}}) where {S, T, N}
-    A = transform!(T, unwrap(source, S.parameters[N], N, source.ctable.num_rows), source.ctable.num_rows)
-    bools = getbools(source, N)
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, col) where {S, T}
+    A = transform!(T, unwrap(source, S.parameters[col], col, source.ctable.num_rows), source.ctable.num_rows)
+    bools = getbools(source, col)
     V = Vector{Union{T, Null}}(A)
     foreach(x->bools[x] && (V[x] = null), 1:length(A))
     return V
 end
-@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Bool}, row, ::Type{Val{N}}) where {S, N}
-    checknonull(source, N)
-    A = unwrap(source, S.parameters[N], N, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Bool}, row, col) where {S}
+    checknonull(source, col)
+    A = unwrap(source, S.parameters[col], col, max(1,div(bytes_for_bits(source.ctable.num_rows),8)))
     return transform!(Bool, A, source.ctable.num_rows)::Vector{Bool}
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{T}, row, ::Type{Val{N}}) where {T <: AbstractString, N}
-    checknonull(source, N)
-    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{T}, row, col) where {T <: AbstractString}
+    checknonull(source, col)
+    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     return T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, ::Type{Val{N}}) where {T <: AbstractString, N}
-    bools = getbools(source, N)
-    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
-    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, col) where {T <: AbstractString}
+    bools = getbools(source, col)
+    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     V = Vector{Union{T, Null}}(A)
     foreach(x->bools[x] && (V[x] = null), 1:length(A))
     return V
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{WeakRefString{UInt8}}, row, ::Type{Val{N}}) where {N}
-    checknonull(source, N)
-    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
-    offset = source.ctable.columns[N].values.offset +
-             (source.ctable.columns[N].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{WeakRefString{UInt8}}, row, col)
+    checknonull(source, col)
+    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+    offset = source.ctable.columns[col].values.offset +
+             (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
-    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
     return WeakRefStringArray(source.data, A)
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Null}}, row, ::Type{Val{N}}) where {N}
-    bools = getbools(source, N)
-    offsets = unwrap(source, Int32, N, source.ctable.num_rows + 1)
-    offset = source.ctable.columns[N].values.offset +
-             (source.ctable.columns[N].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Null}}, row, col)
+    bools = getbools(source, col)
+    offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
+    offset = source.ctable.columns[col].values.offset +
+             (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
-    values = unwrap(source, UInt8, N, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
+    values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     A = (?WeakRefString{UInt8})[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
     foreach(x->bools[x] && (A[x] = null), 1:length(A))
     return WeakRefStringArray(source.data, A)
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, ::Type{Val{N}}) where {T, R, N}
-    checknonull(source, N)
-    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
-    pool = CategoricalPool{String, R}(source.levels[N], source.orders[N])
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, col) where {T, R}
+    checknonull(source, col)
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return CategoricalArray{String,1,R}(refs, pool)
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, ::Type{Val{N}}) where {T, R, N}
-    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, N, source.ctable.num_rows), source.ctable.num_rows)
-    bools = getbools(source, N)
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, col) where {T, R}
+    refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+    bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
-    pool = CategoricalPool{String, R}(source.levels[N], source.orders[N])
+    pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return CategoricalArray{Union{String, Null},1,R}(refs, pool)
 end
 
@@ -417,8 +417,8 @@ end
 Data.streamtypes(::Type{<:Feather.Sink}) = [Data.Column, Data.Field]
 Data.weakrefstrings(::Type{<:Feather.Sink}) = true
 
-Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col::Type{Val{N}}, kr::Type{Val{S}}) where {T, N, S} = Data.streamto!(sink.df, Data.Field, val, row, col, kr)
-Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col::Type{Val{N}}, kr::Type{Val{S}}) where {T, N, S} = Data.streamto!(sink.df, Data.Column, column, row, col, kr)
+Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col, kr::Type{Val{S}}) where {T, S} = Data.streamto!(sink.df, Data.Field, val, row, col, kr)
+Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col, kr::Type{Val{S}}) where {T, S} = Data.streamto!(sink.df, Data.Column, column, row, col, kr)
 
 function Data.close!(sink::Feather.Sink)
     sch = Data.schema(sink.df)

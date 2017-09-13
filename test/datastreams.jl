@@ -32,8 +32,8 @@ else
     DF.columns[3] = NullableArray{WeakRefString{UInt8},1}(Array{WeakRefString{UInt8}}(size(DF, 1)), ones(Bool, size(DF, 1)), Vector{UInt8}(stringdata2))
     ind = ind2 = 1
     for i = 1:size(DF, 1)
-        DF.columns[2][i] = Nullable(WeakRefString(pointer(stringdata, ind), length(strings[i]), ind))
-        DF.columns[3][i] = Nullable(WeakRefString(pointer(stringdata2, ind2), length(strings2[i]), ind2))
+        DF.columns[2][i] = Nullable(WeakRefString(pointer(stringdata, ind), length(strings[i])))
+        DF.columns[3][i] = Nullable(WeakRefString(pointer(stringdata2, ind2), length(strings2[i])))
         ind += length(strings[i])
         ind2 += length(strings2[i])
     end

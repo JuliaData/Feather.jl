@@ -190,7 +190,7 @@ function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{NullableVec
     offset = source.ctable.columns[col].values.offset +
              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
-    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+             A = [WeakRefString(pointer(source.data)+offset+offset[1], Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     bools = getbools(source, col)
     return NullableArray{WeakRefString{UInt8},1}(A, bools, source.data)
 end
@@ -317,13 +317,15 @@ valuelength{T}(val::T) = length(String(val))
 valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
 
 writevalue{T}(io, val::T) = Base.write(io, Vector{UInt8}(String(val)))
+writevalue(io, val::String) = Base.write(io, val)
 writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)
-    for (ind, v) in enumerate(arr)
+    for ind in 1:length(arr)
+        v = arr[ind]
         off += Feather.valuelength(v)
         offsets[ind + 1] = off
     end

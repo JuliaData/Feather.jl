@@ -317,13 +317,15 @@ valuelength{T}(val::T) = length(String(val))
 valuelength{T}(val::Nullable{T}) = isnull(val) ? 0 : length(get(val))
 
 writevalue{T}(io, val::T) = Base.write(io, Vector{UInt8}(String(val)))
+writevalue(io, val::String) = Base.write(io, val)
 writevalue{T}(io, val::Nullable{T}) = isnull(val) ? 0 : Base.write(io, Vector{UInt8}(String(get(val))))
 
 function writecolumn{T<:Union{Vector{UInt8},AbstractString}}(io, ::Type{T}, arr)
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)
-    for (ind, v) in enumerate(arr)
+    for ind in 1:length(arr)
+        v = arr[ind]
         off += Feather.valuelength(v)
         offsets[ind + 1] = off
     end

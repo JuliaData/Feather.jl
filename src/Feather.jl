@@ -340,12 +340,14 @@ valuelength(val::Null) = 0
 
 writevalue(io, val::T) where {T} = Base.write(io, string(val))
 writevalue(io, val::Null) = 0
+writevalue(io, val::String) = Base.write(io, val)
 
 function writecolumn(io, ::Type{T}, arr) where {T <: Union{Vector{UInt8}, AbstractString}}
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)
-    for (ind, v) in enumerate(arr)
+    for ind = 1:length(arr)
+        v = arr[ind]
         off += Feather.valuelength(v)
         offsets[ind + 1] = off
     end

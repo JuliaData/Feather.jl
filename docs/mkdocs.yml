@@ -1,5 +1,5 @@
 site_name:        Feather.jl
-repo_url:         https://github.com/JuliaStats/Feather.jl
+repo_url:         https://github.com/JuliaData/Feather.jl
 site_description: Library for working with feather-formatted files
 site_author:      Jacob Quinn
 

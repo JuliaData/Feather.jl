@@ -48,6 +48,15 @@ for t in temps
     rm(t)
 end
 
+# issue #34
+data = DataFrame(A=Union{Null, String}[randstring(10) for i ∈ 1:100], B=rand(100))
+data[2, :A] = null
+Feather.write("testfile.feather", data)
+df = Feather.read("testfile.feather")
+@test size(df) == (100, 2)
+gc();
+rm("testfile.feather")
+
 # check if valid, non-sudo docker is available
 dockercheck = false
 try

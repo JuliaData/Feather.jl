@@ -330,10 +330,9 @@ function writecolumn(io, ::Type{DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
 end
 # other primitive T
-writecolumn(io, ::Type{Union{T, Null}}, A) where {T} = writecolumn(io, T, map(x->ifelse(isnull(x),zero(T),x), A))
-function writecolumn(io, ::Type{T}, A) where {T}
-    return writepadded(io, A)
-end
+writecolumn(io, ::Type{T}, A::Vector{Union{Null, T}}) where {T} = writecolumn(io, T, map(x->ifelse(isnull(x),zero(T),x), A))
+writecolumn(io, ::Type{T}, A) where {T} = writepadded(io, A)
+
 # List types
 valuelength(val::T) where {T} = length(string(val))
 valuelength(val::Null) = 0
@@ -342,7 +341,7 @@ writevalue(io, val::T) where {T} = Base.write(io, string(val))
 writevalue(io, val::Null) = 0
 writevalue(io, val::String) = Base.write(io, val)
 
-function writecolumn(io, ::Type{T}, arr) where {T <: Union{Vector{UInt8}, AbstractString}}
+function writecolumn(io, ::Type{T}, arr::Union{Vector{T}, Vector{Union{Null, T}}}) where {T <: Union{Vector{UInt8}, AbstractString}}
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)
@@ -446,7 +445,7 @@ function Data.close!(sink::Feather.Sink)
         len = length(arr)
         total_bytes = Feather.writenulls(io, arr, null_count, len, total_bytes)
         # write out array values
-        TT = eltype(arr)
+        TT = Nulls.T(eltype(arr))
         total_bytes += Feather.writecolumn(io, TT, arr)
         values = Feather.Metadata.PrimitiveArray(Feather.feathertype(TT), Feather.Metadata.PLAIN, offset, len, null_count, total_bytes)
         push!(columns, Feather.Metadata.Column(String(name), values, Feather.getmetadata(io, TT, arr), String("")))

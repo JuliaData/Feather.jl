@@ -1,9 +1,9 @@
-using Feather, Base.Test, Nulls, WeakRefStrings, CategoricalArrays
+using Feather, Base.Test, Nulls, WeakRefStrings, CategoricalArrays, DataFrames
 
-# testdir = joinpath(dirname(@__FILE__), "data")
-# testdir2 = joinpath(dirname(@__FILE__), "newdata")
-testdir = joinpath(Pkg.dir("Feather"), "test/data")
-testdir2 = joinpath(Pkg.dir("Feather"), "test/newdata")
+testdir = joinpath(dirname(@__FILE__), "data")
+testdir2 = joinpath(dirname(@__FILE__), "newdata")
+# testdir = joinpath(Pkg.dir("Feather"), "test/data")
+# testdir2 = joinpath(Pkg.dir("Feather"), "test/newdata")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 append!(files, map(x -> joinpath(testdir2, x), readdir(testdir2)))
 
@@ -18,7 +18,7 @@ for f in files
     sink = Feather.write(sink, df)
     df2 = Feather.read(temp)
 
-    for (c1,c2) in zip(df, df2)
+    for (c1,c2) in zip(df.columns, df2.columns)
         for i = 1:length(c1)
             @test c1[i] == c2[i]
         end
@@ -107,32 +107,10 @@ finally
 
     run(`docker stop feathertest`)
     run(`docker rm feathertest`)
-    rm("test.feather")
-    rm("test2.feather")
+    try
+        rm("test.feather")
+        rm("test2.feather")
+    end
 end
 
 end
-
-# using DataStreamsIntegrationTests
-#
-# # test Data.Field-based streaming
-# FFILE = joinpath(DSTESTDIR, "randoms_small.feather")
-# source = Feather.Source(FFILE)
-# sch = Data.schema(source, Data.Field)
-# df = DataFrame(sch, Data.Field, false, Data.reference(source))
-# Data.stream!(source, Data.Field, df, sch, sch, [identity, identity, identity, identity, identity, identity, identity])
-# DataStreamsIntegrationTests.check(df, 99)
-#
-# # test DataArray DataFrame
-# for i = 1:size(df, 2)
-#     if !(typeof(df.columns[i]) <: DataArray)
-#         df.columns[i] = DataArray(df.columns[i].values, df.columns[i].isnull)
-#     end
-# end
-#
-# if !is_windows()
-# if VERSION < v"0.6.0"
-#     workspace()
-# end
-# include("datastreams.jl")
-# end

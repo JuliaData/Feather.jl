@@ -22,13 +22,13 @@ scale(::Type{Millisecond}, x) = x.value
 scale(::Type{Microsecond}, x) = div(x.value,1000)
 scale(::Type{Nanosecond}, x) =  div(x.value,1000000)
 
-function unix2datetime{P}(::Type{P}, x)
+function unix2datetime(::Type{P}, x) where P
     rata = UNIXEPOCH_TS + scale(P, x)
     return DateTime(Dates.UTM(rata))
 end
 datetime2unix(x::DateTime) = Dates.value(x) - UNIXEPOCH_TS
 
-Base.convert{P,Z}(::Type{DateTime}, x::Timestamp{P,Z}) = unix2datetime(P, x)
+Base.convert(::Type{DateTime}, x::Timestamp{P,Z}) where {P, Z} = unix2datetime(P, x)
 Base.show(io::IO, x::Timestamp) = show(io, convert(DateTime,x))
 
 struct Date

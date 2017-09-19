@@ -1,8 +1,8 @@
 module Feather
 
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
 
-export Data
+export Data, DataFrame
 
 # because there's currently not a better place for these to live
 import Base.==
@@ -34,6 +34,15 @@ function writepadded(io, x)
     Base.write(io, zeros(UInt8, diff))
     return bw + diff
 end
+function writepadded(io, x::Vector{String})
+    bw = 0
+    for str in x
+        bw += Base.write(io, str)
+    end
+    diff = paddedlength(bw) - bw
+    Base.write(io, zeros(UInt8, diff))
+    return bw + diff
+end
 
 juliastoragetype(meta::Void, values_type) = Type_2julia[values_type]
 function juliastoragetype(meta::Metadata.CategoryMetadata, values_type)
@@ -61,11 +70,11 @@ function addlevels!(::Type{T}, catlevels, orders, i, meta, values_type, data, ve
 end
 
 schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 0 && !nullable, T, Union{T, Null})
-schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, ?s))
+schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Null}))
 schematype(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalValue{T, R}, CategoricalValue{Union{T, Null}, R})
 
 # DataStreams interface types
-mutable struct Source{S, T <: NamedTuple} <: Data.Source
+mutable struct Source{S, T} <: Data.Source
     path::String
     schema::Data.Schema
     ctable::Metadata.CTable
@@ -77,7 +86,7 @@ mutable struct Source{S, T <: NamedTuple} <: Data.Source
 end
 
 # reading feather files
-if is_windows()
+if Sys.iswindows()
     const should_use_mmap = false
 else
     const should_use_mmap = true
@@ -110,7 +119,7 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
         push!(juliatypes, schematype(jl, col.values.null_count, nullable, weakrefstrings))
     end
     sch = Data.Schema(juliatypes, header, ctable.num_rows)
-    columns = NamedTuple(sch, Data.Column, false)
+    columns = DataFrame(sch, Data.Column, false)
     sch.rows = ctable.num_rows
     # construct Data.Schema and Feather.Source
     return Source{Tuple{types...}, typeof(columns)}(file, sch, ctable, m, levels, orders, columns)
@@ -193,7 +202,7 @@ end
              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
-    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+    A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     return WeakRefStringArray(source.data, A)
 end
 @inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Null}}, row, col)
@@ -203,7 +212,7 @@ end
              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
-    A = (?WeakRefString{UInt8})[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i]), Int(offset + offsets[i]+1)) for i = 1:source.ctable.num_rows]
+    A = Union{WeakRefString{UInt8}, Null}[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     foreach(x->bools[x] && (A[x] = null), 1:length(A))
     return WeakRefStringArray(source.data, A)
 end
@@ -227,7 +236,7 @@ end
 `Feather.read(file, sink::Data.Sink; weakrefstrings::Bool=true)` => `Data.Sink`
 
 `Feather.read` takes a feather-formatted binary `file` argument and "streams" the data to the
-provided `sink` argument, a `NamedTuple` by default. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
+provided `sink` argument, a `DataFrame` by default. A fully constructed `sink` can be provided as the 2nd argument (the 2nd method above),
 or a Sink can be constructed "on the fly" by providing the type of Sink and any necessary positional arguments
 (the 1st method above).
 
@@ -242,7 +251,7 @@ Keyword arguments:
 Examples:
 
 ```julia
-# default read method, returns a NamedTuple
+# default read method, returns a DataFrame
 df = Feather.read("cool_feather_file.feather")
 
 # read a feather file directly into a SQLite database table
@@ -252,7 +261,7 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=NamedTuple, args...; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
     sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, args...; append=append, transforms=transforms)
     return Data.close!(sink)
 end
@@ -262,7 +271,7 @@ function read(file::AbstractString, sink::T; nullable::Bool=false, weakrefstring
     return Data.close!(sink)
 end
 
-read(source::Feather.Source, sink=NamedTuple, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); return Data.close!(sink))
+read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); return Data.close!(sink))
 read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T} = (sink = Data.stream!(source, sink; append=append, transforms=transforms); return Data.close!(sink))
 
 # writing feather files
@@ -374,7 +383,7 @@ function writenulls(io, A::T, null_count, len, total_bytes) where {T <: Categori
 end
 
 "DataStreams Sink implementation for feather-formatted binary files"
-mutable struct Sink{T <: NamedTuple} <: Data.Sink
+mutable struct Sink{T} <: Data.Sink
     ctable::Metadata.CTable
     file::String
     io::IOBuffer
@@ -383,20 +392,20 @@ mutable struct Sink{T <: NamedTuple} <: Data.Sink
     df::T
 end
 
-function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column, existing::NamedTuple=NamedTuple();
+function Sink(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column, existing=null;
               description::AbstractString="", metadata::AbstractString="",
-              append::Bool=false, reference::Vector{UInt8}=UInt8[],)
-    if !isempty(existing)
-        df = NamedTuple(schema, T, append, existing; reference=reference)
+              append::Bool=false, reference::Vector{UInt8}=UInt8[],) where {T<:Data.StreamType}
+    if !isnull(existing)
+        df = DataFrame(schema, T, append, existing; reference=reference)
     else
         if append
             df = Feather.read(file)
         else
-            df = NamedTuple(schema, T, append; reference=reference)
+            df = DataFrame(schema, T, append; reference=reference)
         end
     end
     if append
-        schema.rows += size(Data.schema(df), 1)
+        schema.rows += length(df.columns) > 0 ? length(df.columns[1]) : 0
     end
     io = IOBuffer()
     Feather.writepadded(io, FEATHER_MAGIC_BYTES)
@@ -404,32 +413,31 @@ function Sink{T<:Data.StreamType}(file::AbstractString, schema::Data.Schema=Data
 end
 
 # DataStreams interface
-function Sink{T}(sch::Data.Schema, ::Type{T}, append::Bool, file::AbstractString; reference::Vector{UInt8}=UInt8[], kwargs...)
+function Sink(sch::Data.Schema, ::Type{T}, append::Bool, file::AbstractString; reference::Vector{UInt8}=UInt8[], kwargs...) where T
     sink = Sink(file, sch, T; append=append, reference=reference, kwargs...)
     return sink
 end
 
-function (::Type{S})(sink, sch::Data.Schema, ::Type{T}, append::Bool; reference::Vector{UInt8}=UInt8[]) where {S <: Sink, T}
+function Sink(sink, sch::Data.Schema, ::Type{T}, append::Bool; reference::Vector{UInt8}=UInt8[]) where T
     sink = Sink(sink.file, sch, T, sink.df; append=append, reference=reference)
     return sink
 end
 
-Data.streamtypes(::Type{<:Feather.Sink}) = [Data.Column, Data.Field]
-Data.weakrefstrings(::Type{<:Feather.Sink}) = true
+Data.streamtypes(::Type{Sink}) = [Data.Column, Data.Field]
+Data.weakrefstrings(::Type{Sink}) = true
 
 Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col, kr::Type{Val{S}}) where {T, S} = Data.streamto!(sink.df, Data.Field, val, row, col, kr)
 Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col, kr::Type{Val{S}}) where {T, S} = Data.streamto!(sink.df, Data.Column, column, row, col, kr)
 
 function Data.close!(sink::Feather.Sink)
-    sch = Data.schema(sink.df)
-    header = Data.header(sch)
+    header = sink.df.header
     data = sink.df
     io = sink.io
     # write out arrays, building each array's metadata as we go
-    rows = size(sch, 1)
+    rows = length(sink.df.columns) > 0 ? length(sink.df.columns[1]) : 0
     columns = Feather.Metadata.Column[]
     for (i, name) in enumerate(header)
-        arr = data[i]
+        arr = data.columns[i]
         total_bytes = 0
         offset = position(io)
         null_count = Feather.nullcount(arr)
@@ -476,7 +484,7 @@ Keyword arguments:
 Examples:
 
 ```julia
-df = NamedTuple(...)
+df = DataFrame(...)
 Feather.write("shiny_new_feather_file.feather", df)
 
 Feather.write("sqlite_query_result.feather", SQLite.Source, db, "select * from cool_table")

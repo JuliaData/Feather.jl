@@ -8,10 +8,10 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/JuliaStats/Feather.jl.git",
+    repo = "github.com/JuliaData/Feather.jl.git",
     target = "build",
     deps = nothing,
     make = nothing,
-    julia = "0.5",
+    julia = "nightly",
     osname = "linux"
 )

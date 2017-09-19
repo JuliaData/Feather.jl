@@ -334,7 +334,9 @@ writecolumn(io, ::Type{T}, A::Vector{Union{Null, T}}) where {T} = writecolumn(io
 writecolumn(io, ::Type{T}, A) where {T} = writepadded(io, A)
 
 # List types
-valuelength(val::T) where {T} = length(string(val))
+valuelength(val::T) where {T} = sizeof(string(val))
+valuelength(val::String) = sizeof(val)
+valuelength(val::WeakRefString{UInt8}) = val.len
 valuelength(val::Null) = 0
 
 writevalue(io, val::T) where {T} = Base.write(io, string(val))

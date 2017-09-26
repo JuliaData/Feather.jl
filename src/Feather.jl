@@ -73,6 +73,9 @@ schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 
 schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Null}))
 schematype(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalValue{T, R}, CategoricalValue{Union{T, Null}, R})
 
+# TODO this is a horrible hack, fix later
+Base.convert(::Type{Bool}, b::Arrow.Bool) = Feather.transform!(Bool, [b], 1)[1]
+
 # DataStreams interface types
 mutable struct Source{S, T} <: Data.Source
     path::String
@@ -86,7 +89,7 @@ mutable struct Source{S, T} <: Data.Source
 end
 
 # reading feather files
-if Sys.iswindows()
+if Sys.is_windows()
     const should_use_mmap = false
 else
     const should_use_mmap = true
@@ -126,8 +129,9 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
 end
 
 # DataStreams interface
-Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
-Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+# TODO allocate not defined in current version of DataStreams
+# Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
+# Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
@@ -139,13 +143,84 @@ end
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Column}) = true
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Field}) = true
 
-@inline function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, col) where {T}
-    isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, row, col))
-    return source.columns[col][row]
-end
+# TODO old version of streamfrom for field, to be removed
+# @inline function Data.streamfrom(source::Source, ::Type{Data.Field}, ::Type{T}, row, col) where {T}
+#     isempty(source.columns, col) && append!(source.columns[col], Data.streamfrom(source, Data.Column, T, row, col))
+#     return source.columns[col][row]
+# end
 
 checknonull(source, col) = source.ctable.columns[col].values.null_count > 0 && throw(NullException)
 getbools(s::Source, col) = s.ctable.columns[col].values.null_count == 0 ? zeros(Bool, s.ctable.num_rows) : Bool[getbit(s.data[s.ctable.columns[col].values.offset + bytes_for_bits(x)], mod1(x, 8)) for x = 1:s.ctable.num_rows]
+@inline function getbool(s::Source, row::Integer, col::Integer)::Bool
+    if s.ctable.columns[col].values.null_count == 0
+        return false
+    end
+
+    addr = s.ctable.columns[col].values.offset + bytes_for_bits(row)
+    getbit(s.data[addr], mod1(row,8))
+end
+
+@inline function checkrowrange(s::Source, row::Integer)
+    !(1 ≤ row ≤ s.ctable.num_rows) && throw(BoundsError("Feather Column $col", row))
+end
+
+# these functions for unsafe_loading of individual fields
+@inline function unload_nocheck(s::Source, ::Type{T}, row::Integer, col::Integer,
+                        off::Integer=0) where T
+    bitmask_bytes = if s.ctable.columns[col].values.null_count > 0
+        getoutputlength(s.ctable.version, bytes_for_bits(s.ctable.num_rows))
+    else
+        0
+    end
+
+    ptr = pointer(s.data) + s.ctable.columns[col].values.offset + bitmask_bytes + (row-1)*sizeof(T)
+    ptr = convert(Ptr{T}, ptr)
+    unsafe_load(ptr)::T
+end
+@inline function unload(s::Source, ::Type{T}, row::Integer, col::Integer,
+                        off::Integer=0) where T
+    checkrowrange(s, row)
+    unload_nocheck(s, T, row, col, off)::T
+end
+
+@inline function _string_bounds(s::Source, row::Integer, col::Integer)
+    unload_nocheck(s, Int32, row, col), unload_nocheck(s, Int32, row+1, col)
+end
+
+@inline function _string_offset(s::Source)
+    offsets_size = (s.ctable.num_rows+1)*sizeof(Int32)
+    getoutputlength(s.ctable.version, offsets_size)
+end
+
+# for unloading individual strings
+function _unload_string(s::Source, row::Integer, col::Integer)
+    checkrowrange(s, row)
+
+    str_start, str_end = _string_bounds(s, row, col)
+    ℓ = str_end - str_start
+
+    off = _string_offset(s)
+
+    values = unwrap(s, UInt8, col, ℓ, off+str_start)
+    unsafe_string(pointer(values), ℓ)
+end
+function _get_weakrefstring(s::Source, row::Integer, col::Integer)
+    checkrowrange(s, row)
+
+    str_start, str_end = _string_bounds(s, row, col)
+    ℓ = str_end - str_start
+
+    off = _string_offset(s)
+
+    off += s.ctable.columns[col].values.offset
+    if s.ctable.columns[col].values.null_count > 0
+        off += getoutputlength(s.ctable.version, bytes_for_bits(s.ctable.num_rows))
+    end
+
+    ptr = pointer(s.data, off + str_start + 1)
+    WeakRefString(ptr, ℓ)
+end
+
 
 @inline function unwrap(s::Source, ::Type{T}, col, rows, off=0) where {T}
     bitmask_bytes = s.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(s.ctable.version, Feather.bytes_for_bits(s.ctable.num_rows)) : 0
@@ -163,6 +238,43 @@ function transform!(::Type{Bool}, A, len)
     return convert(Vector{Bool}, B)
 end
 
+# Data.Field streamfrom
+function Data.streamfrom(s::Source{S}, ::Type{Data.Field}, ::Type{T},
+                         row::Integer, col::Integer) where {T,S}
+    checknonull(s, col)
+    x = unload(s, S.parameters[col], row, col)
+    convert(T, x)::T
+end
+function Data.streamfrom(s::Source{S}, ::Type{Data.Field}, ::Type{Union{T,Null}},
+                         row::Integer, col::Integer)::Union{T,Null} where {T,S}
+    if getbool(s, row, col)
+        return null
+    end
+    x = unload(s, S.parameters[col], row, col)
+    convert(T, x)
+end
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{T},
+                         row::Integer, col::Integer) where T <: AbstractString
+    checknonull(s, col)
+    convert(T, _unload_string(s, row, col))::T
+end
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{T,Null}},
+                         row::Integer, col::Integer) where T <: AbstractString
+    getbool(s, row, col) ? null : convert(T, _unload_string(s, row, col))
+end
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{WeakRefString{UInt8}},
+                         row::Integer, col::Integer)::WeakRefString{UInt8}
+    _get_weakrefstring(s, row, col)
+end
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{WeakRefString{UInt8}, Null}},
+                         row::Integer, col::Integer)::Union{WeakRefString{UInt8},Null}
+    if getbool(s, row, col)
+        return null
+    end
+    _get_weakrefstring(s, row, col)
+end
+
+# Data.Column streamfrom
 @inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{T}, row, col) where {S, T}
     checknonull(source, col)
     A = unwrap(source, S.parameters[col], col, source.ctable.num_rows)

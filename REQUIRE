@@ -4,3 +4,4 @@ CategoricalArrays 0.2
 DataFrames
 DataStreams 0.2.0
 WeakRefStrings 0.3
+Compat 0.27.0

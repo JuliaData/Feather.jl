@@ -1,6 +1,6 @@
 module Feather
 
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames, Compat
 
 export Data, DataFrame
 
@@ -86,7 +86,7 @@ mutable struct Source{S, T} <: Data.Source
 end
 
 # reading feather files
-if Sys.iswindows()
+if Compat.Sys.iswindows()
     const should_use_mmap = false
 else
     const should_use_mmap = true

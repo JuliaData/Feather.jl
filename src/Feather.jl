@@ -437,9 +437,15 @@ end
 function writecolumn(io, ::Type{Date}, A)
     return writepadded(io, map(Arrow.date2unix, A))
 end
+function writecolumn(io, ::Type{Date}, A::Vector{Union{Null, Date}})
+    writepadded(io, map(x->(isnull(x) ? zero(Int32) : Arrow.date2unix(x)), A))
+end
 # Timestamp
 function writecolumn(io, ::Type{DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
+end
+function writecolumn(io, ::Type{DateTime}, A::Vector{Union{Null, DateTime}})
+    writepadded(io, map(x->(isnull(x) ? zero(Int64) : Arrow.datetime2unix(x)), A))
 end
 # other primitive T
 writecolumn(io, ::Type{T}, A::Vector{Union{Null, T}}) where {T} = writecolumn(io, T, map(x->ifelse(isnull(x),zero(T),x), A))

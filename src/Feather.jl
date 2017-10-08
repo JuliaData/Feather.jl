@@ -1,6 +1,6 @@
 module Feather
 
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames, Compat
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
 
 export Data, DataFrame
 
@@ -85,8 +85,14 @@ mutable struct Source{S, T} <: Data.Source
     columns::T # holds references to pre-fetched columns for Data.getfield
 end
 
+if Base.VERSION < v"0.7"
+    iswindows = is_windows
+else
+    iswindows = Sys.iswindows
+end
+
 # reading feather files
-if Compat.Sys.iswindows()
+if iswindows()
     const should_use_mmap = false
 else
     const should_use_mmap = true
@@ -126,8 +132,10 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
 end
 
 # DataStreams interface
-Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
-Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+allocate(::Type{T}, rows, ref) where {T} = Vector{T}(rows)
+allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Null}} = WeakRefStringArray(ref, T, rows)
+allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
+allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data

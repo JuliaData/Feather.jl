@@ -41,7 +41,7 @@ mutable struct TimeMetadata
     unit::TimeUnit
 end
 
-@UNION TypeMetadata Union{Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata}
+@UNION TypeMetadata (Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata)
 
 mutable struct Column
     name::String

@@ -1,3 +1,5 @@
+__precompile__(true)
+
 module Feather
 
 using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
@@ -129,9 +131,10 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
 end
 
 # DataStreams interface
-# TODO allocate not defined in current version of DataStreams
-# Data.allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
-# Data.allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+allocate(::Type{T}, rows, ref) where {T} = Vector{T}(rows)
+allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Null}} = WeakRefStringArray(ref, T, rows)
+allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
+allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data

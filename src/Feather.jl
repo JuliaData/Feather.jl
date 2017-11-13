@@ -461,7 +461,7 @@ writevalue(io, val::T) where {T} = Base.write(io, string(val))
 writevalue(io, val::Null) = 0
 writevalue(io, val::String) = Base.write(io, val)
 
-function writecolumn(io, ::Type{T}, arr::Union{Vector{T}, Vector{Union{Null, T}}}) where {T <: Union{Vector{UInt8}, AbstractString}}
+function writecolumn(io, ::Type{T}, arr::Union{WeakRefStringArray{WeakRefString{UInt8}}, Vector{T}, Vector{Union{Null, T}}}) where {T <: Union{Vector{UInt8}, AbstractString}}
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)

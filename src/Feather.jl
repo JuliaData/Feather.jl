@@ -1,7 +1,6 @@
 module Feather
 
-import Mmap
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames, Mmap
 
 export Data, DataFrame
 

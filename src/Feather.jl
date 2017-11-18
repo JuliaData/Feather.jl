@@ -1,6 +1,12 @@
 module Feather
 
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames, Mmap
+if v"0.6" <= VERSION < v"0.7-DEV"
+    using Base.Mmap
+else
+    using Mmap
+end
+
+using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
 
 export Data, DataFrame
 
@@ -101,7 +107,7 @@ end
 function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=should_use_mmap)
     # validity checks
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
-    m = use_mmap ? Mmap.mmap(file) : Base.read(file)
+    m = use_mmap ? mmap(file) : Base.read(file)
     length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format: total length of file = $(length(m))"))
     (m[1:4] == FEATHER_MAGIC_BYTES && m[end-3:end] == FEATHER_MAGIC_BYTES) ||
         throw(ArgumentError("'$file' is not in the feather format: header = $(m[1:4]), footer = $(m[end-3:end])"))

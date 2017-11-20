@@ -2,7 +2,7 @@ __precompile__(true)
 
 module Feather
 
-using FlatBuffers, Nulls, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
+using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
 
 export Data, DataFrame
 
@@ -71,9 +71,9 @@ function addlevels!(::Type{T}, catlevels, orders, i, meta, values_type, data, ve
     return
 end
 
-schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 0 && !nullable, T, Union{T, Null})
-schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Null}))
-schematype(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalValue{T, R}, CategoricalValue{Union{T, Null}, R})
+schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 0 && !nullable, T, Union{T, Missing})
+schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Missing}))
+schematype(::Type{CategoricalValue{T, R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalValue{T, R}, CategoricalValue{Union{T, Missing}, R})
 
 # TODO this is a horrible hack, fix later
 Base.convert(::Type{Bool}, b::Arrow.Bool) = Feather.transform!(Bool, [b], 1)[1]
@@ -132,9 +132,9 @@ end
 
 # DataStreams interface
 allocate(::Type{T}, rows, ref) where {T} = Vector{T}(rows)
-allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Null}} = WeakRefStringArray(ref, T, rows)
+allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Missing}} = WeakRefStringArray(ref, T, rows)
 allocate(::Type{CategoricalValue{T, R}}, rows, ref) where {T, R} = CategoricalArray{T, 1, R}(rows)
-allocate(::Type{Union{CategoricalValue{T, R}, Null}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Null}, 1, R}(rows)
+allocate(::Type{Union{CategoricalValue{T, R}, Missing}}, rows, ref) where {T, R} = CategoricalArray{Union{T, Missing}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
@@ -248,10 +248,10 @@ function Data.streamfrom(s::Source{S}, ::Type{Data.Field}, ::Type{T},
     x = unload(s, S.parameters[col], row, col)
     convert(T, x)::T
 end
-function Data.streamfrom(s::Source{S}, ::Type{Data.Field}, ::Type{Union{T,Null}},
-                         row::Integer, col::Integer)::Union{T,Null} where {T,S}
+function Data.streamfrom(s::Source{S}, ::Type{Data.Field}, ::Type{Union{T,Missing}},
+                         row::Integer, col::Integer)::Union{T,Missing} where {T,S}
     if getbool(s, row, col)
-        return null
+        return missing
     end
     x = unload(s, S.parameters[col], row, col)
     convert(T, x)
@@ -261,18 +261,18 @@ function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{T},
     checknonull(s, col)
     convert(T, _unload_string(s, row, col))::T
 end
-function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{T,Null}},
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{T,Missing}},
                          row::Integer, col::Integer) where T <: AbstractString
-    getbool(s, row, col) ? null : convert(T, _unload_string(s, row, col))
+    getbool(s, row, col) ? missing : convert(T, _unload_string(s, row, col))
 end
 function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{WeakRefString{UInt8}},
                          row::Integer, col::Integer)::WeakRefString{UInt8}
     _get_weakrefstring(s, row, col)
 end
-function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{WeakRefString{UInt8}, Null}},
-                         row::Integer, col::Integer)::Union{WeakRefString{UInt8},Null}
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{Union{WeakRefString{UInt8}, Missing}},
+                         row::Integer, col::Integer)::Union{WeakRefString{UInt8},Missing}
     if getbool(s, row, col)
-        return null
+        return missing
     end
     _get_weakrefstring(s, row, col)
 end
@@ -283,11 +283,11 @@ end
     A = unwrap(source, S.parameters[col], col, source.ctable.num_rows)
     return transform!(T, A, source.ctable.num_rows)
 end
-@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, col) where {S, T}
+@inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Union{T, Missing}}, row, col) where {S, T}
     A = transform!(T, unwrap(source, S.parameters[col], col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
-    V = Vector{Union{T, Null}}(A)
-    foreach(x->bools[x] && (V[x] = null), 1:length(A))
+    V = Vector{Union{T, Missing}}(A)
+    foreach(x->bools[x] && (V[x] = missing), 1:length(A))
     return V
 end
 @inline function Data.streamfrom(source::Source{S}, ::Type{Data.Column}, ::Type{Bool}, row, col) where {S}
@@ -301,13 +301,13 @@ end
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     return T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Null}}, row, col) where {T <: AbstractString}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{T, Missing}}, row, col) where {T <: AbstractString}
     bools = getbools(source, col)
     offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
     A = T[unsafe_string(pointer(values, offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
-    V = Vector{Union{T, Null}}(A)
-    foreach(x->bools[x] && (V[x] = null), 1:length(A))
+    V = Vector{Union{T, Missing}}(A)
+    foreach(x->bools[x] && (V[x] = missing), 1:length(A))
     return V
 end
 @inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{WeakRefString{UInt8}}, row, col)
@@ -320,15 +320,15 @@ end
     A = [WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
     return WeakRefStringArray(source.data, A)
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Null}}, row, col)
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{WeakRefString{UInt8}, Missing}}, row, col)
     bools = getbools(source, col)
     offsets = unwrap(source, Int32, col, source.ctable.num_rows + 1)
     offset = source.ctable.columns[col].values.offset +
              (source.ctable.columns[col].values.null_count > 0 ? Feather.getoutputlength(source.ctable.version, Feather.bytes_for_bits(source.ctable.num_rows)) : 0) +
              getoutputlength(source.ctable.version, sizeof(offsets))
     values = unwrap(source, UInt8, col, offsets[end], getoutputlength(source.ctable.version, sizeof(offsets)))
-    A = Union{WeakRefString{UInt8}, Null}[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
-    foreach(x->bools[x] && (A[x] = null), 1:length(A))
+    A = Union{WeakRefString{UInt8}, Missing}[WeakRefString(pointer(source.data, offset + offsets[i]+1), Int(offsets[i+1] - offsets[i])) for i = 1:source.ctable.num_rows]
+    foreach(x->bools[x] && (A[x] = missing), 1:length(A))
     return WeakRefStringArray(source.data, A)
 end
 @inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{T,R}}, row, col) where {T, R}
@@ -337,12 +337,12 @@ end
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return CategoricalArray{String,1,R}(refs, pool)
 end
-@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Null},R}}, row, col) where {T, R}
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{Union{T, Missing},R}}, row, col) where {T, R}
     refs = transform!(CategoricalValue{T,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
     bools = getbools(source, col)
     refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
-    return CategoricalArray{Union{String, Null},1,R}(refs, pool)
+    return CategoricalArray{Union{String, Missing},1,R}(refs, pool)
 end
 
 """
@@ -391,7 +391,7 @@ read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{
 
 # writing feather files
 feathertype(::Type{T}) where {T} = Feather.julia2Type_[T]
-feathertype(::Type{Union{T, Null}}) where {T} = feathertype(T)
+feathertype(::Type{Union{T, Missing}}) where {T} = feathertype(T)
 feathertype(::Type{CategoricalValue{T,R}}) where {T, R} = julia2Type_[R]
 feathertype(::Type{<:Arrow.Time}) = Metadata.INT64
 feathertype(::Type{Date}) = Metadata.INT32
@@ -399,7 +399,7 @@ feathertype(::Type{DateTime}) = Metadata.INT64
 feathertype(::Type{<:AbstractString}) = Metadata.UTF8
 
 getmetadata(io, T, A) = nothing
-getmetadata(io, ::Type{Union{T, Null}}, A) where {T} = getmetadata(io, T, A)
+getmetadata(io, ::Type{Union{T, Missing}}, A) where {T} = getmetadata(io, T, A)
 getmetadata(io, ::Type{Date}, A) = Metadata.DateMetadata()
 getmetadata(io, ::Type{Arrow.Time{T}}, A) where {T} = Metadata.TimeMetadata(julia2TimeUnit[T])
 getmetadata(io, ::Type{DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
@@ -422,7 +422,7 @@ values(A::Vector) = A
 values(A::CategoricalArray{T,1,R}) where {T, R} = map(x-> x - R(1), A.refs)
 
 nullcount(A) = 0
-nullcount(A::Vector{Union{T, Null}}) where {T} = sum(isnull(x) for x in A)
+nullcount(A::Vector{Union{T, Missing}}) where {T} = sum(isnull(x) for x in A)
 nullcount(A::CategoricalArray) = sum(A.refs .== 0)
 
 # Bool
@@ -433,38 +433,38 @@ end
 function writecolumn(io, ::Type{CategoricalValue{T,R}}, A) where {T, R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
-function writecolumn(io, ::Type{Union{CategoricalValue{T,R}, Null}}, A) where {T, R}
+function writecolumn(io, ::Type{Union{CategoricalValue{T,R}, Missing}}, A) where {T, R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date
 function writecolumn(io, ::Type{Date}, A)
     return writepadded(io, map(Arrow.date2unix, A))
 end
-function writecolumn(io, ::Type{Date}, A::Vector{Union{Null, Date}})
-    writepadded(io, map(x->(isnull(x) ? zero(Int32) : Arrow.date2unix(x)), A))
+function writecolumn(io, ::Type{Date}, A::Vector{Union{Missing, Date}})
+    writepadded(io, map(x->(ismissing(x) ? zero(Int32) : Arrow.date2unix(x)), A))
 end
 # Timestamp
 function writecolumn(io, ::Type{DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
 end
-function writecolumn(io, ::Type{DateTime}, A::Vector{Union{Null, DateTime}})
-    writepadded(io, map(x->(isnull(x) ? zero(Int64) : Arrow.datetime2unix(x)), A))
+function writecolumn(io, ::Type{DateTime}, A::Vector{Union{Missing, DateTime}})
+    writepadded(io, map(x->(ismissing(x) ? zero(Int64) : Arrow.datetime2unix(x)), A))
 end
 # other primitive T
-writecolumn(io, ::Type{T}, A::Vector{Union{Null, T}}) where {T} = writecolumn(io, T, map(x->ifelse(isnull(x),zero(T),x), A))
+writecolumn(io, ::Type{T}, A::Vector{Union{Missing, T}}) where {T} = writecolumn(io, T, map(x->ifelse(ismissing(x),zero(T),x), A))
 writecolumn(io, ::Type{T}, A) where {T} = writepadded(io, A)
 
 # List types
 valuelength(val::T) where {T} = sizeof(string(val))
 valuelength(val::String) = sizeof(val)
 valuelength(val::WeakRefString{UInt8}) = val.len
-valuelength(val::Null) = 0
+valuelength(val::Missing) = 0
 
 writevalue(io, val::T) where {T} = Base.write(io, string(val))
-writevalue(io, val::Null) = 0
+writevalue(io, val::Missing) = 0
 writevalue(io, val::String) = Base.write(io, val)
 
-function writecolumn(io, ::Type{T}, arr::Union{WeakRefStringArray{WeakRefString{UInt8}}, Vector{T}, Vector{Union{Null, T}}}) where {T <: Union{Vector{UInt8}, AbstractString}}
+function writecolumn(io, ::Type{T}, arr::Union{WeakRefStringArray{WeakRefString{UInt8}}, Vector{T}, Vector{Union{Missing, T}}}) where {T <: Union{Vector{UInt8}, AbstractString}}
     len = length(arr)
     off = 0
     offsets = zeros(Int32, len + 1)
@@ -487,11 +487,11 @@ function writecolumn(io, ::Type{T}, arr::Union{WeakRefStringArray{WeakRefString{
 end
 
 writenulls(io, A, null_count, len, total_bytes) = return total_bytes
-function writenulls(io, A::Vector{Union{T, Null}}, null_count, len, total_bytes) where {T}
+function writenulls(io, A::Vector{Union{T, Missing}}, null_count, len, total_bytes) where {T}
     # write out null bitmask
     if null_count > 0
         null_bytes = Feather.bytes_for_bits(len)
-        bytes = BitArray(Bool[!isnull(x) for x in A])
+        bytes = BitArray(Bool[!ismissing(x) for x in A])
         total_bytes = writepadded(io, view(reinterpret(UInt8, bytes.chunks), 1:null_bytes))
     end
     return total_bytes
@@ -516,10 +516,10 @@ mutable struct Sink{T} <: Data.Sink
     df::T
 end
 
-function Sink(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column, existing=null;
+function Sink(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}=Data.Column, existing=missing;
               description::AbstractString="", metadata::AbstractString="",
               append::Bool=false, reference::Vector{UInt8}=UInt8[],) where {T<:Data.StreamType}
-    if !isnull(existing)
+    if !ismissing(existing)
         df = DataFrame(schema, T, append, existing; reference=reference)
     else
         if append
@@ -568,7 +568,7 @@ function Data.close!(sink::Feather.Sink)
         len = length(arr)
         total_bytes = Feather.writenulls(io, arr, null_count, len, total_bytes)
         # write out array values
-        TT = Nulls.T(eltype(arr))
+        TT = Missings.T(eltype(arr))
         total_bytes += Feather.writecolumn(io, TT, arr)
         values = Feather.Metadata.PrimitiveArray(Feather.feathertype(TT), Feather.Metadata.PLAIN, offset, len, null_count, total_bytes)
         push!(columns, Feather.Metadata.Column(String(name), values, Feather.getmetadata(io, TT, arr), String("")))

@@ -1,4 +1,4 @@
-using Feather, Base.Test, Nulls, WeakRefStrings, CategoricalArrays, DataFrames
+using Feather, Base.Test, Missings, WeakRefStrings, CategoricalArrays
 
 testdir = joinpath(dirname(@__FILE__), "data")
 testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -10,6 +10,7 @@ append!(files, map(x -> joinpath(testdir2, x), readdir(testdir2)))
 temps = []
 
 for f in files
+    println("tesing $f...")
     source = Feather.Source(f)
     df = Feather.read(source)
     temp = tempname()
@@ -18,7 +19,7 @@ for f in files
     sink = Feather.write(sink, df)
     df2 = Feather.read(temp)
 
-    for (c1,c2) in zip(df.columns, df2.columns)
+    for (c1,c2) in zip(df, df2)
         for i = 1:length(c1)
             @test isequal(c1[i], c2[i])
         end
@@ -49,18 +50,18 @@ for t in temps
 end
 
 # issue #34
-data = DataFrame(A=Union{Null, String}[randstring(10) for i ∈ 1:100], B=rand(100))
-data[2, :A] = null
+data = (A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
+data.A[2] = missing
 Feather.write("testfile.feather", data)
 df = Feather.read("testfile.feather")
-@test size(df) == (100, 2)
+@test size(Data.schema(df)) == (100, 2)
 gc();
 rm("testfile.feather")
 
 # check if valid, non-sudo docker is available
 dockercheck = false
 try
-    dockercheck = success(`docker images`)
+    global dockercheck = success(`docker images`)
 catch
     println("It seems that `docker` is not installed or has to be run with sudo, skipping python roundtrip tests")
 end
@@ -84,14 +85,14 @@ try
 
     println("Read test.feather into julia...")
     run(`docker cp feathertest:/home/test.feather test.feather`)
-    df = Feather.read("test.feather")
+    global df = Feather.read("test.feather")
 
     @test df[:Autf8] == ["hey","there","sailor"]
     @test df[:Abool] == [true, true, false]
     @test df[:Acat] == CategoricalArray(["a","b","c"])
     @test df[:Acatordered] == CategoricalArray(["d","e","f"])
     @test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-    @test isequal(df[:Afloat32], [1.0, null, 0.0])
+    @test isequal(df[:Afloat32], [1.0, missing, 0.0])
     @test df[:Afloat64] == [Inf,1.0,0.0]
 
     df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
@@ -105,7 +106,7 @@ try
     @test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
     @test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
     @test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-    @test isequal(df2[:Afloat32], [1.0, null, 0.0])
+    @test isequal(df2[:Afloat32], [1.0, missing, 0.0])
     @test df2[:Afloat64] == [Inf,1.0,0.0]
 
     println("Read test2.feather into python...")

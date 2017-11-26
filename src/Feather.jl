@@ -1,11 +1,7 @@
 __precompile__(true)
 module Feather
 
-using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams
-
-if Base.VERSION >= v"0.7.0-DEV.2009"
-    using Mmap
-end
+using Compat, FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams
 
 export Data
 
@@ -90,11 +86,7 @@ mutable struct Source{S, T} <: Data.Source
     columns::T # holds references to pre-fetched columns for Data.getfield
 end
 
-if Base.VERSION < v"0.7-DEV"
-    iswindows = is_windows
-else
-    iswindows = Sys.iswindows
-end
+iswindows = Compat.Sys.iswindows
 
 # reading feather files
 if iswindows()
@@ -106,7 +98,7 @@ end
 function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=should_use_mmap)
     # validity checks
     isfile(file) || throw(ArgumentError("'$file' is not a valid file"))
-    m = use_mmap ? Mmap.mmap(file) : Base.read(file)
+    m = use_mmap ? Compat.Mmap.mmap(file) : Base.read(file)
     length(m) < 12 && throw(ArgumentError("'$file' is not in the feather format: total length of file = $(length(m))"))
     (m[1:4] == FEATHER_MAGIC_BYTES && m[end-3:end] == FEATHER_MAGIC_BYTES) ||
         throw(ArgumentError("'$file' is not in the feather format: header = $(m[1:4]), footer = $(m[end-3:end])"))

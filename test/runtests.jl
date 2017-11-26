@@ -1,4 +1,4 @@
-using Feather, Base.Test, Missings, WeakRefStrings, CategoricalArrays
+using Feather, Compat, Missings, WeakRefStrings, CategoricalArrays
 
 testdir = joinpath(dirname(@__FILE__), "data")
 testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -21,26 +21,26 @@ for f in files
 
     for (c1,c2) in zip(df, df2)
         for i = 1:length(c1)
-            @test isequal(c1[i], c2[i])
+            Compat.Test.@test isequal(c1[i], c2[i])
         end
     end
 
-    @test source.ctable.description == sink.ctable.description
-    @test source.ctable.num_rows == sink.ctable.num_rows
-    @test source.ctable.metadata == sink.ctable.metadata
+    Compat.Test.@test source.ctable.description == sink.ctable.description
+    Compat.Test.@test source.ctable.num_rows == sink.ctable.num_rows
+    Compat.Test.@test source.ctable.metadata == sink.ctable.metadata
     for (col1,col2) in zip(source.ctable.columns,sink.ctable.columns)
-        @test col1.name == col2.name
-        @test col1.metadata_type == col2.metadata_type
-        @test typeof(col1.metadata) == typeof(col2.metadata)
-        @test col1.user_metadata == col2.user_metadata
+        Compat.Test.@test col1.name == col2.name
+        Compat.Test.@test col1.metadata_type == col2.metadata_type
+        Compat.Test.@test typeof(col1.metadata) == typeof(col2.metadata)
+        Compat.Test.@test col1.user_metadata == col2.user_metadata
 
         v1 = col1.values; v2 = col2.values
-        @test v1.type_ == v2.type_
-        @test v1.encoding == v2.encoding
-        # @test v1.offset == v2.offset # currently not python/R compatible due to wesm/feather#182
-        @test v1.length == v2.length
-        @test v1.null_count == v2.null_count
-        # @test v1.total_bytes == v2.total_bytes
+        Compat.Test.@test v1.type_ == v2.type_
+        Compat.Test.@test v1.encoding == v2.encoding
+        # Compat.Test.@test v1.offset == v2.offset # currently not python/R compatible due to wesm/feather#182
+        Compat.Test.@test v1.length == v2.length
+        Compat.Test.@test v1.null_count == v2.null_count
+        # Compat.Test.@test v1.total_bytes == v2.total_bytes
     end
 end
 
@@ -54,7 +54,7 @@ data = (A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
 data.A[2] = missing
 Feather.write("testfile.feather", data)
 df = Feather.read("testfile.feather")
-@test size(Data.schema(df)) == (100, 2)
+Compat.Test.@test size(Data.schema(df)) == (100, 2)
 gc();
 rm("testfile.feather")
 
@@ -87,13 +87,13 @@ try
     run(`docker cp feathertest:/home/test.feather test.feather`)
     global df = Feather.read("test.feather")
 
-    @test df[:Autf8] == ["hey","there","sailor"]
-    @test df[:Abool] == [true, true, false]
-    @test df[:Acat] == CategoricalArray(["a","b","c"])
-    @test df[:Acatordered] == CategoricalArray(["d","e","f"])
-    @test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-    @test isequal(df[:Afloat32], [1.0, missing, 0.0])
-    @test df[:Afloat64] == [Inf,1.0,0.0]
+    Compat.Test.@test df[:Autf8] == ["hey","there","sailor"]
+    Compat.Test.@test df[:Abool] == [true, true, false]
+    Compat.Test.@test df[:Acat] == CategoricalArray(["a","b","c"])
+    Compat.Test.@test df[:Acatordered] == CategoricalArray(["d","e","f"])
+    Compat.Test.@test df[:Adatetime] == [Compat.Dates.DateTime(2016,1,1), Compat.Dates.DateTime(2016,1,2), Compat.Dates.DateTime(2016,1,3)]
+    Compat.Test.@test isequal(df[:Afloat32], [1.0, missing, 0.0])
+    Compat.Test.@test df[:Afloat64] == [Inf,1.0,0.0]
 
     df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
 
@@ -101,13 +101,13 @@ try
     Feather.write("test2.feather", df)
     df2 = Feather.read("test2.feather")
 
-    @test df2[:Autf8] == ["hey","there","sailor"]
-    @test df2[:Abool] == [true, true, false]
-    @test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
-    @test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
-    @test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
-    @test isequal(df2[:Afloat32], [1.0, missing, 0.0])
-    @test df2[:Afloat64] == [Inf,1.0,0.0]
+    Compat.Test.@test df2[:Autf8] == ["hey","there","sailor"]
+    Compat.Test.@test df2[:Abool] == [true, true, false]
+    Compat.Test.@test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
+    Compat.Test.@test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
+    Compat.Test.@test df2[:Adatetime] == [Compat.Dates.DateTime(2016,1,1), Compat.Dates.DateTime(2016,1,2), Compat.Dates.DateTime(2016,1,3)]
+    Compat.Test.@test isequal(df2[:Afloat32], [1.0, missing, 0.0])
+    Compat.Test.@test df2[:Afloat64] == [Inf,1.0,0.0]
 
     println("Read test2.feather into python...")
     run(`docker cp test2.feather feathertest:/home/test2.feather`)

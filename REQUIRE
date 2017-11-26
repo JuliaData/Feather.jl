@@ -1,6 +1,7 @@
 julia 0.6
-FlatBuffers 0.2.0
-CategoricalArrays 0.2
-DataFrames
-DataStreams 0.2.0
-WeakRefStrings 0.3
+Compat 0.37.0
+FlatBuffers 0.3.1
+Missings
+CategoricalArrays 0.3.0
+WeakRefStrings 0.4.0
+DataStreams 0.3.0

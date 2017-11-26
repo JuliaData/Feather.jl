@@ -1,7 +1,13 @@
 __precompile__(true)
 module Feather
 
-using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams
+using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
+
+if Base.VERSION < v"0.7.0-DEV.2575"
+    const Dates = Base.Dates
+else
+    import Dates
+end
 
 if Base.VERSION >= v"0.7.0-DEV.2009"
     using Mmap
@@ -58,8 +64,8 @@ juliastoragetype(meta::Metadata.TimestampMetadata, values_type) = Arrow.Timestam
 juliastoragetype(meta::Metadata.DateMetadata, values_type) = Arrow.Date
 juliastoragetype(meta::Metadata.TimeMetadata, values_type) = Arrow.Time{TimeUnit2julia[meta.unit]}
 
-juliatype(::Type{<:Arrow.Timestamp}) = DateTime
-juliatype(::Type{<:Arrow.Date}) = Date
+juliatype(::Type{<:Arrow.Timestamp}) = Dates.DateTime
+juliatype(::Type{<:Arrow.Date}) = Dates.Date
 juliatype(::Type{T}) where {T} = T
 juliatype(::Type{Arrow.Bool}) = Bool
 
@@ -76,7 +82,7 @@ end
 
 schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 0 && !nullable, T, Union{T, Missing})
 schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Missing}))
-schematype(::Type{CategoricalString{R}}, nullcount, nullable, wrs) where {T, R} = ifelse(nullcount == 0 && !nullable, CategoricalString{R}, Union{CategoricalString{R}, Missing})
+schematype(::Type{CategoricalString{R}}, nullcount, nullable, wrs) where {R} = ifelse(nullcount == 0 && !nullable, CategoricalString{R}, Union{CategoricalString{R}, Missing})
 
 # DataStreams interface types
 mutable struct Source{S, T} <: Data.Source
@@ -130,7 +136,7 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
         push!(juliatypes, schematype(jl, col.values.null_count, nullable, weakrefstrings))
     end
     sch = Data.Schema(juliatypes, header, ctable.num_rows)
-    columns = NamedTuple(sch, Data.Column, false)
+    columns = DataFrame(sch, Data.Column, false)
     sch.rows = ctable.num_rows
     # construct Data.Schema and Feather.Source
     return Source{Tuple{types...}, typeof(columns)}(file, sch, ctable, m, levels, orders, columns)
@@ -139,8 +145,8 @@ end
 # DataStreams interface
 # allocate(::Type{T}, rows, ref) where {T} = Vector{T}(rows)
 # allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Missing}} = WeakRefStringArray(ref, T, rows)
-Data.allocate(::Type{CategoricalString{R}}, rows, ref) where {T, R} = CategoricalArray{String, 1, R}(rows)
-Data.allocate(::Type{Union{CategoricalString{R}, Missing}}, rows, ref) where {T, R} = CategoricalArray{Union{String, Missing}, 1, R}(rows)
+Data.allocate(::Type{CategoricalString{R}}, rows, ref) where {R} = CategoricalArray{String, 1, R}(rows)
+Data.allocate(::Type{Union{CategoricalString{R}, Missing}}, rows, ref) where {R} = CategoricalArray{Union{String, Missing}, 1, R}(rows)
 
 Data.schema(source::Feather.Source) = source.schema
 Data.reference(source::Feather.Source) = source.data
@@ -167,8 +173,8 @@ getbools(s::Source, col) = s.ctable.columns[col].values.null_count == 0 ? zeros(
 end
 
 transform!(::Type{T}, A, len) where {T} = A
-transform!(::Type{Date}, A, len) = map(x->Arrow.unix2date(x), A)
-transform!(::Type{DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) where {P, Z} = map(x->Arrow.unix2datetime(P, x), A)
+transform!(::Type{Dates.Date}, A, len) = map(x->Arrow.unix2date(x), A)
+transform!(::Type{Dates.DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) where {P, Z} = map(x->Arrow.unix2datetime(P, x), A)
 transform!(::Type{CategoricalString{R}}, A, len) where {R} = map(x->x + R(1), A)
 function transform!(::Type{Bool}, A, len)
     B = falses(len)
@@ -274,7 +280,7 @@ Feather.read("cool_feather_file.feather", SQLite.Sink, db, "cool_feather_table")
 """
 function read end
 
-function read(file::AbstractString, sink=Data.Table, args...; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
+function read(file::AbstractString, sink=DataFrame, args...; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=true, append::Bool=false, transforms::Dict=Dict{Int,Function}())
     sink = Data.stream!(Source(file; nullable=nullable, weakrefstrings=weakrefstrings, use_mmap=use_mmap), sink, args...; append=append, transforms=transforms)
     return Data.close!(sink)
 end
@@ -284,24 +290,24 @@ function read(file::AbstractString, sink::T; nullable::Bool=false, weakrefstring
     return Data.close!(sink)
 end
 
-read(source::Feather.Source, sink=Data.Table, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); return Data.close!(sink))
+read(source::Feather.Source, sink=DataFrame, args...; append::Bool=false, transforms::Dict=Dict{Int,Function}()) = (sink = Data.stream!(source, sink, args...; append=append, transforms=transforms); return Data.close!(sink))
 read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{Int,Function}()) where {T} = (sink = Data.stream!(source, sink; append=append, transforms=transforms); return Data.close!(sink))
 
 # writing feather files
 feathertype(::Type{T}) where {T} = Feather.julia2Type_[T]
 feathertype(::Type{Union{T, Missing}}) where {T} = feathertype(T)
-feathertype(::Type{CategoricalString{R}}) where {T, R} = julia2Type_[R]
+feathertype(::Type{CategoricalString{R}}) where {R} = julia2Type_[R]
 feathertype(::Type{<:Arrow.Time}) = Metadata.INT64
-feathertype(::Type{Date}) = Metadata.INT32
-feathertype(::Type{DateTime}) = Metadata.INT64
+feathertype(::Type{Dates.Date}) = Metadata.INT32
+feathertype(::Type{Dates.DateTime}) = Metadata.INT64
 feathertype(::Type{<:AbstractString}) = Metadata.UTF8
 
 getmetadata(io, T, A) = nothing
 getmetadata(io, ::Type{Union{T, Missing}}, A) where {T} = getmetadata(io, T, A)
-getmetadata(io, ::Type{Date}, A) = Metadata.DateMetadata()
+getmetadata(io, ::Type{Dates.Date}, A) = Metadata.DateMetadata()
 getmetadata(io, ::Type{Arrow.Time{T}}, A) where {T} = Metadata.TimeMetadata(julia2TimeUnit[T])
-getmetadata(io, ::Type{DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
-function getmetadata(io, ::Type{CategoricalString{R}}, A) where {T, R}
+getmetadata(io, ::Type{Dates.DateTime}, A) = Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
+function getmetadata(io, ::Type{CategoricalString{R}}, A) where {R}
     lvls = CategoricalArrays.levels(A)
     len = length(lvls)
     offsets = zeros(Int32, len+1)
@@ -328,18 +334,18 @@ function writecolumn(io, ::Type{Bool}, A)
     return writepadded(io, view(reinterpret(UInt8, convert(BitVector, A).chunks), 1:bytes_for_bits(length(A))))
 end
 # Category
-function writecolumn(io, ::Type{CategoricalString{R}}, A) where {T, R}
+function writecolumn(io, ::Type{CategoricalString{R}}, A) where {R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
-function writecolumn(io, ::Type{Union{CategoricalString{R}, Missing}}, A) where {T, R}
+function writecolumn(io, ::Type{Union{CategoricalString{R}, Missing}}, A) where {R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date
-function writecolumn(io, ::Type{Date}, A)
+function writecolumn(io, ::Type{Dates.Date}, A)
     return writepadded(io, map(Arrow.date2unix, A))
 end
 # Timestamp
-function writecolumn(io, ::Type{DateTime}, A)
+function writecolumn(io, ::Type{Dates.DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
 end
 # other primitive T
@@ -412,12 +418,12 @@ function Sink(file::AbstractString, schema::Data.Schema=Data.Schema(), ::Type{T}
               description::AbstractString="", metadata::AbstractString="",
               append::Bool=false, reference::Vector{UInt8}=UInt8[],) where {T<:Data.StreamType}
     if !ismissing(existing)
-        df = NamedTuple(schema, T, append, existing; reference=reference)
+        df = DataFrame(schema, T, append, existing; reference=reference)
     else
         if append
             df = Feather.read(file)
         else
-            df = NamedTuple(schema, T, append; reference=reference)
+            df = DataFrame(schema, T, append; reference=reference)
         end
     end
     if append
@@ -446,14 +452,14 @@ Data.streamto!(sink::Feather.Sink, ::Type{Data.Field}, val::T, row, col, kr::Typ
 Data.streamto!(sink::Feather.Sink, ::Type{Data.Column}, column::T, row, col, kr::Type{Val{S}}) where {T, S} = Data.streamto!(sink.df, Data.Column, column, row, col, kr)
 
 function Data.close!(sink::Feather.Sink)
-    header = Data.header(Data.schema(sink.df))
+    header = sink.df.header
     data = sink.df
     io = sink.io
     # write out arrays, building each array's metadata as we go
-    rows = length(data) > 0 ? length(data[1]) : 0
+    rows = length(header) > 0 ? length(data.columns[1]) : 0
     columns = Feather.Metadata.Column[]
     for (i, name) in enumerate(header)
-        arr = data[i]
+        arr = data.columns[i]
         total_bytes = 0
         offset = position(io)
         null_count = Feather.nullcount(arr)

@@ -1,4 +1,10 @@
-using Feather, Base.Test, Missings, WeakRefStrings, CategoricalArrays
+using Feather, Base.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames
+
+if Base.VERSION < v"0.7.0-DEV.2575"
+    const Dates = Base.Dates
+else
+    import Dates
+end
 
 testdir = joinpath(dirname(@__FILE__), "data")
 testdir2 = joinpath(dirname(@__FILE__), "newdata")
@@ -19,7 +25,7 @@ for f in files
     sink = Feather.write(sink, df)
     df2 = Feather.read(temp)
 
-    for (c1,c2) in zip(df, df2)
+    for (c1,c2) in zip(df.columns, df2.columns)
         for i = 1:length(c1)
             @test isequal(c1[i], c2[i])
         end
@@ -50,8 +56,8 @@ for t in temps
 end
 
 # issue #34
-data = (A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
-data.A[2] = missing
+data = DataFrame(A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
+data[2, :A] = missing
 Feather.write("testfile.feather", data)
 df = Feather.read("testfile.feather")
 @test size(Data.schema(df)) == (100, 2)
@@ -91,7 +97,7 @@ try
     @test df[:Abool] == [true, true, false]
     @test df[:Acat] == CategoricalArray(["a","b","c"])
     @test df[:Acatordered] == CategoricalArray(["d","e","f"])
-    @test df[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+    @test df[:Adatetime] == [Dates.DateTime(2016,1,1), Dates.DateTime(2016,1,2), Dates.DateTime(2016,1,3)]
     @test isequal(df[:Afloat32], [1.0, missing, 0.0])
     @test df[:Afloat64] == [Inf,1.0,0.0]
 
@@ -105,7 +111,7 @@ try
     @test df2[:Abool] == [true, true, false]
     @test df2[:Acat] == CategoricalArrays.CategoricalArray(["a","b","c"])
     @test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
-    @test df2[:Adatetime] == [DateTime(2016,1,1), DateTime(2016,1,2), DateTime(2016,1,3)]
+    @test df2[:Adatetime] == [Dates.DateTime(2016,1,1), Dates.DateTime(2016,1,2), Dates.DateTime(2016,1,3)]
     @test isequal(df2[:Afloat32], [1.0, missing, 0.0])
     @test df2[:Afloat64] == [Inf,1.0,0.0]
 

@@ -1,5 +1,11 @@
 module Metadata
 
+if Base.VERSION < v"0.7.0-DEV.2575"
+    const Dates = Base.Dates
+else
+    import Dates
+end
+
 using FlatBuffers
 
 @enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
@@ -101,8 +107,8 @@ const julia2Type_ = Dict{DataType,Metadata.Type_}(
     Float64 => Metadata.DOUBLE,
     String  => Metadata.UTF8,
     Vector{UInt8}   => Metadata.BINARY,
-    DateTime   => Metadata.INT64,
-    Date   => Metadata.INT32,
+    Dates.DateTime   => Metadata.INT64,
+    Dates.Date   => Metadata.INT32,
     WeakRefString{UInt8} => Metadata.UTF8
 )
 

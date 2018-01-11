@@ -30,7 +30,7 @@ const ALIGNMENT = 8
 const SHOULD_USE_MMAP = !iswindows()
 
 
-include("Arrow.jl")  # Arrow type definitions
+include("arrow/Arrow.jl")  # Arrow type definitions
 include("metadata.jl")  # flatbuffer defintions
 include("dataio.jl")
 include("source.jl")

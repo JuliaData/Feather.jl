@@ -89,10 +89,10 @@ getmetadata(io::IO, ::Type{Dates.Date}, A::AbstractVector) = Metadata.DateMetada
 function getmetadata(io::IO, ::Type{Arrow.Time{T}}, A::AbstractVector) where {T}
     Metadata.TimeMetadata(julia2TimeUnit[T])
 end
-function getmetadata(io, ::Type{Dates.DateTime}, A::AbstractVector)
+function getmetadata(io::IO, ::Type{Dates.DateTime}, A::AbstractVector)
     Metadata.TimestampMetadata(julia2TimeUnit[Arrow.Millisecond], "")
 end
-function getmetadata(io, ::Type{CategoricalString{R}}, A::AbstractVector) where {R}
+function getmetadata(io::IO, ::Type{CategoricalString{R}}, A::AbstractVector) where {R}
     lvls = CategoricalArrays.levels(A)
     len = length(lvls)
     offsets = zeros(Int32, len+1)

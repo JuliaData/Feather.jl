@@ -1,6 +1,7 @@
 __precompile__(true)
 module Feather
 
+using Arrow
 using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
 
 
@@ -18,8 +19,12 @@ else
     iswindows = Sys.iswindows
 end
 
+# TODO for now we are not compatible with old feather files (that don't pad length)
 
 export Data
+
+import Base: size, read, write
+import DataFrames: DataFrame
 
 
 const FEATHER_VERSION = 2
@@ -30,12 +35,9 @@ const ALIGNMENT = 8
 const SHOULD_USE_MMAP = !iswindows()
 
 
-include("arrow/Arrow.jl")  # Arrow type definitions
 include("metadata.jl")  # flatbuffer defintions
-include("dataio.jl")
+include("utils.jl")
 include("source.jl")
-include("sink.jl")
-include("fileio.jl")
 
 
 end # module

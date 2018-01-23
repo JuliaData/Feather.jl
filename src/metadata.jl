@@ -117,17 +117,15 @@ const MDATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
 
 const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8, Metadata.BINARY])
 
-# TODO why is this a separate dict??
-# const JULIA_TIME_DICT = Dict{Metadata.TimeUnit,DataType}(
-#     Metadata.SECOND => Arrow.Second,
-#     Metadata.MILLISECOND => Arrow.Millisecond,
-#     Metadata.MICROSECOND => Arrow.Microsecond,
-#     Metadata.NANOSECOND => Arrow.Nanosecond
-# )
-# const MDATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
+const JULIA_TIME_DICT = Dict{Metadata.TimeUnit,DataType}(
+    Metadata.SECOND => Dates.Second,
+    Metadata.MILLISECOND => Dates.Millisecond,
+    Metadata.MICROSECOND => Dates.Microsecond,
+    Metadata.NANOSECOND => Dates.Nanosecond
+)
+const MDATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
 
 
-# TODO this really doesn't seem like an ideal way to deal with this
 isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
 
 
@@ -136,9 +134,9 @@ function juliastoragetype(meta::Metadata.CategoryMetadata, values_type::Metadata
     CategoricalString{JULIA_TYPE_DICT[values_type]}
 end
 function juliastoragetype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
-    throw(ErrorException("Not implemented."))
-    # TODO define this!
+    Timestamp{JULIA_TIME_DICT[meta.unit]}
 end
+juliastoragetype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
 
 # TODO finish implementing these
 juliatype(::Type{T}) where T = T

@@ -3,7 +3,7 @@ using DataStreams
 using Feather
 
 
-s = Feather.Source("stringtest1.feather")
+s = Feather.Source("basictest.feather", weakrefstrings=false)
 
-v = Feather.constructcolumn(s, 1)
+df = DataFrame(s)
 

@@ -29,6 +29,8 @@ size(s::Source, i::Integer) = size(s.schema, i)
 
 datapointer(s::Source) = pointer(s.data)
 
+checkcolbounds(s::Source, col::Integer) = (1 ≤ col ≤ size(s, 2)) || throw(BoundsError(s, col))
+
 
 # DataFrame constructor, using Arrow objects
 function DataFrame(s::Source)
@@ -67,7 +69,7 @@ function coloffsetslocation(col::Metadata.Column)
     if isprimitivetype(col.values.dtype)
         throw(ErrorException("Trying to obtain offset values for primitive array."))
     end
-    coloffset(col) + bitmaskbytes(col) + 1
+    coloffset(col) + bitmaskbytes(col)
 end
 
 # doesn't include offsets
@@ -82,7 +84,6 @@ function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadat
     NullablePrimitive{T}(ptr, off, dat, nrows(col), nullcount(col))
 end
 
-# TODO this is fucked up. check padding length for offsets!!!
 function constructcolumn(ptr::Ptr{UInt8}, ::Type{T}, col::Metadata.Column) where T<:AbstractString
     data_loc = coldatalocation(col)
     offset_loc = coloffsetslocation(col)
@@ -94,10 +95,11 @@ function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadat
     bmask_loc, data_loc = collocations(col)
     offset_loc = coloffsetslocation(col)
     p = Primitive{UInt8}(ptr, data_loc, col.values.total_bytes)
-    NullableList{typeof(p),T}(ptr, bmask_loc, offset_loc, nrows(col), p)
+    NullableList{typeof(p),T}(ptr, bmask_loc, offset_loc, nrows(col), nullcount(col), p)
 end
 
 function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
+    @boundscheck checkcolbounds(s, col)
     constructcolumn(datapointer(s), T, getcolumn(s, col))
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)

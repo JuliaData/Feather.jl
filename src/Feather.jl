@@ -23,7 +23,7 @@ end
 
 export Data
 
-import Base: size, read, write
+import Base: length, size, read, write
 import DataFrames: DataFrame
 
 

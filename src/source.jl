@@ -38,71 +38,73 @@ function DataFrame(s::Source)
 end
 
 
-
 #=====================================================================================================
-    constructing columns
-
-    TODO: all this stuff assumes no offsets (i.e. primitive bits types)
+    new column construction stuff
 =====================================================================================================#
-nrows(col::Metadata.Column) = col.values.length
+length(p::Metadata.PrimitiveArray) = p.length
 
-nullcount(col::Metadata.Column) = col.values.null_count
+startloc(p::Metadata.PrimitiveArray) = p.offset+1
 
-coloffset(col::Metadata.Column) = col.values.offset+1
+nullcount(p::Metadata.PrimitiveArray) = p.null_count
 
-# right now all bitmasks are the same length
-function bitmaskbytes(col::Metadata.Column)
-    nullcount(col) == 0 ? 0 : paddedlength(bytesforbits(col.values.length))
+function bitmasklength(p::Metadata.PrimitiveArray)
+    nullcount(p) == 0 ? 0 : paddedlength(bytesforbits(length(p)))
 end
 
-# length of the offsets buffer
-function offsetslength(col::Metadata.Column)
-    isprimitivetype(col.values.dtype) ? 0 : (nrows(col)+1)*sizeof(Int32)
+function offsetslength(p::Metadata.PrimitiveArray)
+    isprimitivetype(p.dtype) ? 0 : (length(p)+1)*sizeof(Int32)
 end
 
-coldatalocation(col::Metadata.Column) = coloffset(col) + bitmaskbytes(col) + offsetslength(col)
+# TODO check if this is correct!!!, padding???
+datalength(p::Metadata.PrimitiveArray) = p.total_bytes - offsetslength(p) - bitmasklength(p)
 
-# only makes sense if has nulls
-colbitmasklocation(col::Metadata.Column) = coloffset(col)
+dataloc(p::Metadata.PrimitiveArray) = startloc(p) + bitmasklength(p) + offsetslength(p)
 
-function coloffsetslocation(col::Metadata.Column)
-    if isprimitivetype(col.values.dtype)
+# only makes sense for nullable arrays
+bitmaskloc(p::Metadata.PrimitiveArray) = startloc(p)
+
+function offsetsloc(p::Metadata.PrimitiveArray)
+    if isprimitivetype(p.dtype)
         throw(ErrorException("Trying to obtain offset values for primitive array."))
     end
-    coloffset(col) + bitmaskbytes(col)
+    startloc(p) + bitmasklength(p)
 end
 
-# doesn't include offsets
-collocations(col::Metadata.Column) = (colbitmasklocation(col), coldatalocation(col))
+
+function Arrow.Primitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
+    Primitive{T}(ptr, dataloc(p), length(p))
+end
+
+function Arrow.NullablePrimitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
+    NullablePrimitive{T}(ptr, bitmaskloc(p), dataloc(p), length(p), nullcount(p))
+end
+
+function Arrow.List(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
+    q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
+    List{typeof(q),T}(ptr, offsetsloc(p), length(p), q)
+end
+
+function Arrow.NullableList(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
+    q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
+    NullableList{typeof(q),T}(ptr, bitmaskloc(p), offsetsloc(p), length(p), nullcount(p), q)
+end
 
 
 function constructcolumn(ptr::Ptr{UInt8}, ::Type{T}, col::Metadata.Column) where T
-    Primitive{T}(ptr, coldatalocation(col), nrows(col))
+    Primitive(T, ptr, col.values)
 end
 function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadata.Column) where T
-    off, dat = collocations(col)
-    NullablePrimitive{T}(ptr, off, dat, nrows(col), nullcount(col))
+    NullablePrimitive(T, ptr, col.values)
 end
-
 function constructcolumn(ptr::Ptr{UInt8}, ::Type{T}, col::Metadata.Column) where T<:AbstractString
-    data_loc = coldatalocation(col)
-    offset_loc = coloffsetslocation(col)
-    p = Primitive{UInt8}(ptr, data_loc, col.values.total_bytes)
-    List{typeof(p),T}(ptr, offset_loc, nrows(col), p)
+    List(T, ptr, col.values)
 end
 function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadata.Column
                         ) where T<:AbstractString
-    bmask_loc, data_loc = collocations(col)
-    offset_loc = coloffsetslocation(col)
-    p = Primitive{UInt8}(ptr, data_loc, col.values.total_bytes)
-    NullableList{typeof(p),T}(ptr, bmask_loc, offset_loc, nrows(col), nullcount(col), p)
+    NullableList(T, ptr, col.values)
 end
-
 function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     @boundscheck checkcolbounds(s, col)
     constructcolumn(datapointer(s), T, getcolumn(s, col))
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)
-
-
-

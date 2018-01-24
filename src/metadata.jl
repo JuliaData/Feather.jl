@@ -88,7 +88,7 @@ const JULIA_TYPE_DICT = Dict{Metadata.DType,DataType}(
     Metadata.UINT64    => UInt64,
     Metadata.FLOAT     => Float32,
     Metadata.DOUBLE    => Float64,
-    Metadata.UTF8      => WeakRefString{UInt8},
+    Metadata.UTF8      => String,  # can also be WeakRefString{UInt8}
     Metadata.BINARY    => Vector{UInt8},
     Metadata.CATEGORY  => Int64,
     Metadata.TIMESTAMP => Int64,
@@ -129,27 +129,17 @@ const MDATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA
 isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
 
 
-juliastoragetype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
-function juliastoragetype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
-    CategoricalString{JULIA_TYPE_DICT[values_type]}
+juliatype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
+function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
+    JULIA_TYPE_DICT[meta.levels.dtype]
 end
-function juliastoragetype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
+function juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
     Timestamp{JULIA_TIME_DICT[meta.unit]}
 end
-juliastoragetype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
+juliatype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
 
-# TODO finish implementing these
-juliatype(::Type{T}) where T = T
+function juliatype(col::Metadata.Column)
+    T = juliatype(col.metadata, col.values.dtype)
+    col.values.null_count == 0 ? T : Union{T,Missing}
+end
 
-# TODO these functions should be able to be combined with previous
-function schematype(::Type{T}, nullcount::Integer, nullable::Bool, wrs::Bool) where T
-    (nullcount == 0 && !nullable) ? T : Union{T,Missing}
-end
-function schematype(::Type{<:AbstractString}, nullcount::Integer, nullable::Bool, wrs::Bool)
-    s = wrs ? WeakRefString{UInt8} : String
-    (nullcount == 0 && !nullable) ? s : Union{s, Missing}
-end
-function schematype(::Type{CategoricalString{R}}, nullcount::Integer, nullable::Bool,
-                    wrs::Bool) where R
-    (nullcount == 0 && !nullable) ? CategoricalString{R} : Union{CategoricalString{R}, Missing}
-end

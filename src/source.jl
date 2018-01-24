@@ -11,10 +11,10 @@ function Source(file::AbstractString, sch::Data.Schema{R,T}, ctable::Metadata.CT
                 data::Vector{UInt8}) where {R,T}
     Source{T}(file, sch, ctable, data)
 end
-function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool=true)
+function Source(file::AbstractString)
     data = loadfile(file)
     ctable = getctable(data)
-    sch = Data.schema(ctable, nullable=nullable, weakrefstrings=weakrefstrings)
+    sch = Data.schema(ctable)
     Source(file, sch, ctable, data)
 end
 
@@ -74,37 +74,49 @@ end
 function Arrow.Primitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
     Primitive{T}(ptr, dataloc(p), length(p))
 end
-
 function Arrow.NullablePrimitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
     NullablePrimitive{T}(ptr, bitmaskloc(p), dataloc(p), length(p), nullcount(p))
 end
-
 function Arrow.List(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
     q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
     List{typeof(q),T}(ptr, offsetsloc(p), length(p), q)
 end
-
 function Arrow.NullableList(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
     q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
     NullableList{typeof(q),T}(ptr, bitmaskloc(p), offsetsloc(p), length(p), nullcount(p), q)
 end
 
+arrowvector(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T = Primitive(T, ptr, p)
+function arrowvector(::Type{Union{T,Missing}}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
+    NullablePrimitive(T, ptr, p)
+end
+function arrowvector(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
+    List(T, ptr, p)
+end
+function arrowvector(::Type{Union{T,Missing}}, ptr::Ptr, p::Metadata.PrimitiveArray
+                    ) where T<:AbstractString
+    NullableList(T, ptr, p)
+end
 
-function constructcolumn(ptr::Ptr{UInt8}, ::Type{T}, col::Metadata.Column) where T
-    Primitive(T, ptr, col.values)
+
+function Arrow.DictEncoding(::Type{T}, ptr::Ptr, col::Metadata.Column) where T
+    lvls = arrowvector(T, ptr, col.metadata.levels)
+    DictEncoding{typeof(lvls),T}(ptr, dataloc(col.values), length(col.values), lvls)
 end
-function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadata.Column) where T
-    NullablePrimitive(T, ptr, col.values)
+
+
+function constructcolumn(::Type{T}, ptr::Ptr, meta::K, col::Metadata.Column) where {T,K}
+    arrowvector(T, ptr, col.values)
 end
-function constructcolumn(ptr::Ptr{UInt8}, ::Type{T}, col::Metadata.Column) where T<:AbstractString
-    List(T, ptr, col.values)
+function constructcolumn(::Type{T}, ptr::Ptr, meta::Metadata.CategoryMetadata,
+                         col::Metadata.Column) where T
+    DictEncoding(T, ptr, col)
 end
-function constructcolumn(ptr::Ptr{UInt8}, ::Type{Union{T,Missing}}, col::Metadata.Column
-                        ) where T<:AbstractString
-    NullableList(T, ptr, col.values)
+function constructcolumn(::Type{T}, ptr::Ptr, col::Metadata.Column) where T
+    constructcolumn(T, ptr, col.metadata, col)
 end
 function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     @boundscheck checkcolbounds(s, col)
-    constructcolumn(datapointer(s), T, getcolumn(s, col))
+    constructcolumn(T, datapointer(s), getcolumn(s, col))
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)

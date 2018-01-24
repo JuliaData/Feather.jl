@@ -48,15 +48,13 @@ function getctable(data::AbstractVector{UInt8})
 end
 
 
-function Data.schema(ctable::Metadata.CTable; nullable::Bool=false, weakrefstrings::Bool=true)
+function Data.schema(ctable::Metadata.CTable)
     ncols = length(ctable.columns)
     header = Vector{String}(ncols)
     types = Vector{Type}(ncols)
     for (i, col) ∈ enumerate(ctable.columns)
         header[i] = col.name
-        # TODO clean this up
-        jl = juliatype(juliastoragetype(col.metadata, col.values.dtype))
-        types[i] = schematype(jl, col.values.null_count, nullable, weakrefstrings)
+        types[i] = juliatype(col)
     end
     Data.Schema(types, header, ctable.num_rows)
 end

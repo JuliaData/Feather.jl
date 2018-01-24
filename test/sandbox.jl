@@ -1,9 +1,17 @@
 using DataFrames
 using DataStreams
+using Arrow
 using Feather
 
 
-s = Feather.Source("basictest.feather", weakrefstrings=false)
+# const filename = "dicttest.feather"
+const filename = "datestest.feather"
+# const filename = "basictest.feather"
 
-# df = DataFrame(s)
+
+s = Feather.Source(filename)
+
+# v = DictEncoding(String, pointer(s.data), s.ctable.columns[1])
+
+df = DataFrame(s)
 

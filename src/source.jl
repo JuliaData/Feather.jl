@@ -75,7 +75,7 @@ function Arrow.Primitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where 
     Primitive{T}(ptr, dataloc(p), length(p))
 end
 function Arrow.NullablePrimitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive{T}(ptr, bitmaskloc(p), dataloc(p), length(p), nullcount(p))
+    NullablePrimitive{T}(ptr, bitmaskloc(p), dataloc(p), length(p))
 end
 function Arrow.List(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
     q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
@@ -83,7 +83,7 @@ function Arrow.List(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:Ab
 end
 function Arrow.NullableList(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
     q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
-    NullableList{typeof(q),T}(ptr, bitmaskloc(p), offsetsloc(p), length(p), nullcount(p), q)
+    NullableList{typeof(q),T}(ptr, bitmaskloc(p), offsetsloc(p), length(p), q)
 end
 
 arrowvector(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T = Primitive(T, ptr, p)

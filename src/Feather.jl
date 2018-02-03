@@ -348,6 +348,13 @@ end
 function writecolumn(io, ::Type{Dates.DateTime}, A)
     return writepadded(io, map(Arrow.datetime2unix, A))
 end
+function writecolumn(io, ::Type{DateTime}, A::Vector{Union{DateTime,Missing}})
+    writecolumn(io, DateTime, map(x->ifelse(ismissing(x),Dates.unix2datetime(0),x), A))
+end
+function writecolumn(io, ::Type{Date}, A::Vector{Union{DateTime,Missing}})
+    zerodate = Date(Dates.unix2datetime(0))
+    writecolumn(io, Date, map(x->ifelse(ismissing(x),zerodate,x), A))
+end
 # other primitive T
 writecolumn(io, ::Type{T}, A::Vector{Union{Missing, T}}) where {T} = writecolumn(io, T, map(x->ifelse(ismissing(x),zero(T),x), A))
 writecolumn(io, ::Type{T}, A) where {T} = writepadded(io, A)

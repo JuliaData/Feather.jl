@@ -71,52 +71,53 @@ function offsetsloc(p::Metadata.PrimitiveArray)
 end
 
 
-function Arrow.Primitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
-    Primitive{T}(ptr, dataloc(p), length(p))
+function Arrow.Primitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
+    Primitive{T}(data, dataloc(p), length(p))
 end
-function Arrow.NullablePrimitive(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive{T}(ptr, bitmaskloc(p), dataloc(p), length(p))
+function Arrow.NullablePrimitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
+    NullablePrimitive{T}(data, bitmaskloc(p), dataloc(p), length(p))
 end
-function Arrow.List(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
-    q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
-    List{typeof(q),T}(ptr, offsetsloc(p), length(p), q)
+function Arrow.List(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T<:AbstractString
+    q = Primitive{UInt8}(data, dataloc(p), datalength(p))
+    List{T}(data, offsetsloc(p), length(p), q)
 end
-function Arrow.NullableList(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
-    q = Primitive{UInt8}(ptr, dataloc(p), datalength(p))
-    NullableList{typeof(q),T}(ptr, bitmaskloc(p), offsetsloc(p), length(p), q)
+function Arrow.NullableList(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
+                           ) where T<:AbstractString
+    q = Primitive{UInt8}(data, dataloc(p), datalength(p))
+    NullableList{T}(data, bitmaskloc(p), offsetsloc(p), length(p), q)
 end
 
-arrowvector(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T = Primitive(T, ptr, p)
-function arrowvector(::Type{Union{T,Missing}}, ptr::Ptr, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive(T, ptr, p)
+arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T = Primitive(T, data, p)
+function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
+    NullablePrimitive(T, data, p)
 end
-function arrowvector(::Type{T}, ptr::Ptr, p::Metadata.PrimitiveArray) where T<:AbstractString
-    List(T, ptr, p)
+function arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T<:AbstractString
+    List(T, data, p)
 end
-function arrowvector(::Type{Union{T,Missing}}, ptr::Ptr, p::Metadata.PrimitiveArray
+function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
                     ) where T<:AbstractString
-    NullableList(T, ptr, p)
+    NullableList(T, data, p)
 end
 
 
-function Arrow.DictEncoding(::Type{T}, ptr::Ptr, col::Metadata.Column) where T
-    lvls = arrowvector(T, ptr, col.metadata.levels)
-    DictEncoding{typeof(lvls),T}(ptr, dataloc(col.values), length(col.values), lvls)
+function Arrow.DictEncoding(::Type{T}, data::Vector{UInt8}, col::Metadata.Column) where T
+    lvls = arrowvector(T, data, col.metadata.levels)
+    DictEncoding{T}(data, dataloc(col.values), length(col.values), lvls)
 end
 
 
-function constructcolumn(::Type{T}, ptr::Ptr, meta::K, col::Metadata.Column) where {T,K}
-    arrowvector(T, ptr, col.values)
+function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::K, col::Metadata.Column) where {T,K}
+    arrowvector(T, data, col.values)
 end
-function constructcolumn(::Type{T}, ptr::Ptr, meta::Metadata.CategoryMetadata,
+function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::Metadata.CategoryMetadata,
                          col::Metadata.Column) where T
-    DictEncoding(T, ptr, col)
+    DictEncoding(T, data, col)
 end
-function constructcolumn(::Type{T}, ptr::Ptr, col::Metadata.Column) where T
-    constructcolumn(T, ptr, col.metadata, col)
+function constructcolumn(::Type{T}, data::Vector{UInt8}, col::Metadata.Column) where T
+    constructcolumn(T, data, col.metadata, col)
 end
 function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     @boundscheck checkcolbounds(s, col)
-    constructcolumn(T, datapointer(s), getcolumn(s, col))
+    constructcolumn(T, s.data, getcolumn(s, col))
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)

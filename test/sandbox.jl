@@ -5,8 +5,8 @@ using Feather
 
 
 # const filename = "dicttest.feather"
-# const filename = "datestest.feather"
-const filename = "basictest.feather"
+const filename = "datestest.feather"
+# const filename = "basictest.feather"
 
 
 s = Feather.Source(filename)

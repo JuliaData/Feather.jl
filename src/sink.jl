@@ -10,3 +10,5 @@ function Sink(filename::AbstractString, sch::Data.Schema=Data.Schema())
     ctable = Metadata.CTable("", 0, Metadata.Column[], FEATHER_VERSION, "")
     Sink(filename, sch, ctable, IOBuffer())
 end
+
+

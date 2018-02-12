@@ -143,3 +143,13 @@ function juliatype(col::Metadata.Column)
     col.values.null_count == 0 ? T : Union{T,Missing}
 end
 
+feathertype(::Type{T}) where T = MDATA_TYPE_DICT[T]
+feathertype(::Type{Union{T,Missing}}) where T = feathertype(T)
+feathertype(::Type{Arrow.Datestamp}) = Metadata.INT32
+feathertype(::Type{Arrow.Timestamp}) = Metadata.INT64
+
+getmetadata(io::IO, ::Type{T}) where T = nothing
+getmetadata(io::IO, ::Type{Union{T,Missing}}) where T = getmetadata(io, T)
+getmetadata(io::IO, ::Type{Arrow.Datestamp}) = Metadata.DateMetadata()
+getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}) where T = Metadata.TimeMetadata(MDATA_TIME_DICT[T])
+# TODO will need category metadata

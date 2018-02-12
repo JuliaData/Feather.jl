@@ -1,6 +1,6 @@
 
-paddedlength(x::Integer) = div((x + ALIGNMENT - 1), ALIGNMENT)*ALIGNMENT
-getoutputlength(version::Int32, x::Integer) = version < FEATHER_VERSION ? x : paddedlength(x)
+padding(x::Integer) = div((x + ALIGNMENT - 1), ALIGNMENT)*ALIGNMENT
+getoutputlength(version::Int32, x::Integer) = version < FEATHER_VERSION ? x : padding(x)
 
 function checkmagic(filename::AbstractString, data::AbstractVector{UInt8})
     header = data[1:4]

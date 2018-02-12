@@ -48,7 +48,7 @@ startloc(p::Metadata.PrimitiveArray) = p.offset+1
 nullcount(p::Metadata.PrimitiveArray) = p.null_count
 
 function bitmasklength(p::Metadata.PrimitiveArray)
-    nullcount(p) == 0 ? 0 : paddedlength(bytesforbits(length(p)))
+    nullcount(p) == 0 ? 0 : padding(bytesforbits(length(p)))
 end
 
 function offsetslength(p::Metadata.PrimitiveArray)

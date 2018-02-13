@@ -52,13 +52,12 @@ function bitmasklength(p::Metadata.PrimitiveArray)
 end
 
 function offsetslength(p::Metadata.PrimitiveArray)
-    isprimitivetype(p.dtype) ? 0 : (length(p)+1)*sizeof(Int32)
+    isprimitivetype(p.dtype) ? 0 : padding((length(p)+1)*sizeof(Int32))
 end
 
-# TODO check if this is correct!!!, padding???
-datalength(p::Metadata.PrimitiveArray) = p.total_bytes - offsetslength(p) - bitmasklength(p)
+valueslength(p::Metadata.PrimitiveArray) = p.total_bytes - offsetslength(p) - bitmasklength(p)
 
-dataloc(p::Metadata.PrimitiveArray) = startloc(p) + bitmasklength(p) + offsetslength(p)
+valuesloc(p::Metadata.PrimitiveArray) = startloc(p) + bitmasklength(p) + offsetslength(p)
 
 # only makes sense for nullable arrays
 bitmaskloc(p::Metadata.PrimitiveArray) = startloc(p)
@@ -72,18 +71,18 @@ end
 
 
 function Arrow.Primitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
-    Primitive{T}(data, dataloc(p), length(p))
+    Primitive{T}(data, valuesloc(p), length(p))
 end
 function Arrow.NullablePrimitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive{T}(data, bitmaskloc(p), dataloc(p), length(p))
+    NullablePrimitive{T}(data, bitmaskloc(p), valuesloc(p), length(p))
 end
 function Arrow.List(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T<:AbstractString
-    q = Primitive{UInt8}(data, dataloc(p), datalength(p))
+    q = Primitive{UInt8}(data, valuesloc(p), valueslength(p))
     List{T}(data, offsetsloc(p), length(p), q)
 end
 function Arrow.NullableList(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
                            ) where T<:AbstractString
-    q = Primitive{UInt8}(data, dataloc(p), datalength(p))
+    q = Primitive{UInt8}(data, valuesloc(p), valueslength(p))
     NullableList{T}(data, bitmaskloc(p), offsetsloc(p), length(p), q)
 end
 
@@ -102,7 +101,7 @@ end
 
 function Arrow.DictEncoding(::Type{T}, data::Vector{UInt8}, col::Metadata.Column) where T
     lvls = arrowvector(T, data, col.metadata.levels)
-    DictEncoding{T}(data, dataloc(col.values), length(col.values), lvls)
+    DictEncoding{T}(data, valuesloc(col.values), length(col.values), lvls)
 end
 
 

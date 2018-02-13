@@ -133,7 +133,8 @@ juliatype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type
 function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
     JULIA_TYPE_DICT[meta.levels.dtype]
 end
-function juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
+function juliatype(meta::Union{Metadata.TimestampMetadata,Metadata.TimeMetadata},
+                   values_type::Metadata.DType)
     Timestamp{JULIA_TIME_DICT[meta.unit]}
 end
 juliatype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
@@ -145,11 +146,17 @@ end
 
 feathertype(::Type{T}) where T = MDATA_TYPE_DICT[T]
 feathertype(::Type{Union{T,Missing}}) where T = feathertype(T)
-feathertype(::Type{Arrow.Datestamp}) = Metadata.INT32
-feathertype(::Type{Arrow.Timestamp}) = Metadata.INT64
+feathertype(::Type{<:Arrow.Datestamp}) = Metadata.INT32
+feathertype(::Type{<:Arrow.Timestamp}) = Metadata.INT64
 
-getmetadata(io::IO, ::Type{T}) where T = nothing
-getmetadata(io::IO, ::Type{Union{T,Missing}}) where T = getmetadata(io, T)
-getmetadata(io::IO, ::Type{Arrow.Datestamp}) = Metadata.DateMetadata()
-getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}) where T = Metadata.TimeMetadata(MDATA_TIME_DICT[T])
-# TODO will need category metadata
+getmetadata(io::IO, ::Type{T}, A::ArrowVector) where T = nothing
+getmetadata(io::IO, ::Type{Union{T,Missing}}, A::ArrowVector) where T = getmetadata(io, T, A)
+getmetadata(io::IO, ::Type{Arrow.Datestamp}, A::ArrowVector) = Metadata.DateMetadata()
+function getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}, A::ArrowVector) where T
+    Metadata.TimeMetadata(MDATA_TIME_DICT[T])
+end
+# TODO Arrow standard says nothing about specifying whether DictEncoding is ordered!
+function getmetadata(io::IO, ::Type{T}, A::DictEncoding) where T
+    vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
+    Metadata.CategoryMetadata(vals, true)
+end

@@ -27,6 +27,7 @@ export Data
 
 import Base: length, size, read, write
 import DataFrames: DataFrame
+import Arrow.nullcount
 
 
 const FEATHER_VERSION = 2
@@ -40,6 +41,7 @@ const SHOULD_USE_MMAP = !iswindows()
 include("metadata.jl")  # flatbuffer defintions
 include("utils.jl")
 include("source.jl")
+include("sink.jl")
 
 
 end # module

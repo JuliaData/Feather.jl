@@ -109,9 +109,10 @@ const MDATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
     Float32 => Metadata.FLOAT,
     Float64 => Metadata.DOUBLE,
     String  => Metadata.UTF8,
-    Vector{UInt8}   => Metadata.BINARY,
-    Dates.DateTime   => Metadata.INT64,
-    Dates.Date   => Metadata.INT32,
+    Vector{UInt8} => Metadata.BINARY,
+    Dates.Time => Metadata.INT64,
+    Dates.DateTime => Metadata.INT64,
+    Dates.Date => Metadata.INT32,
     WeakRefString{UInt8} => Metadata.UTF8
 )
 
@@ -133,9 +134,11 @@ juliatype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type
 function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
     JULIA_TYPE_DICT[meta.levels.dtype]
 end
-function juliatype(meta::Union{Metadata.TimestampMetadata,Metadata.TimeMetadata},
-                   values_type::Metadata.DType)
+function juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
     Timestamp{JULIA_TIME_DICT[meta.unit]}
+end
+function juliatype(meta::Metadata.TimeMetadata, values_type::Metadata.DType)
+    TimeOfDay{JULIA_TIME_DICT[meta.unit]}
 end
 juliatype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
 
@@ -148,11 +151,15 @@ feathertype(::Type{T}) where T = MDATA_TYPE_DICT[T]
 feathertype(::Type{Union{T,Missing}}) where T = feathertype(T)
 feathertype(::Type{<:Arrow.Datestamp}) = Metadata.INT32
 feathertype(::Type{<:Arrow.Timestamp}) = Metadata.INT64
+feathertype(::Type{<:Arrow.TimeOfDay}) = Metadata.INT64
 
 getmetadata(io::IO, ::Type{T}, A::ArrowVector) where T = nothing
 getmetadata(io::IO, ::Type{Union{T,Missing}}, A::ArrowVector) where T = getmetadata(io, T, A)
 getmetadata(io::IO, ::Type{Arrow.Datestamp}, A::ArrowVector) = Metadata.DateMetadata()
 function getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}, A::ArrowVector) where T
+    Metadata.TimestampMetadata(MDATA_TIME_DICT[T], "")
+end
+function getmetadata(io::IO, ::Type{Arrow.TimeOfDay{T}}, A::ArrowVector) where T
     Metadata.TimeMetadata(MDATA_TIME_DICT[T])
 end
 # TODO Arrow standard says nothing about specifying whether DictEncoding is ordered!
@@ -160,3 +167,4 @@ function getmetadata(io::IO, ::Type{T}, A::DictEncoding) where T
     vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
     Metadata.CategoryMetadata(vals, true)
 end
+# TODO why complain about nanoseconds???

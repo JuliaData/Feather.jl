@@ -4,12 +4,15 @@ mutable struct Source{S} <: Data.Source
     schema::Data.Schema
     ctable::Metadata.CTable
     data::Vector{UInt8}
+    columns::Vector{ArrowVector}
 end
 
 
 function Source(file::AbstractString, sch::Data.Schema{R,T}, ctable::Metadata.CTable,
                 data::Vector{UInt8}) where {R,T}
-    Source{T}(file, sch, ctable, data)
+    s = Source{T}(file, sch, ctable, data, Vector{ArrowVector}(0))
+    s.columns = constructall(s)
+    s
 end
 function Source(file::AbstractString)
     data = loadfile(file)
@@ -33,9 +36,49 @@ checkcolbounds(s::Source, col::Integer) = (1 ≤ col ≤ size(s, 2)) || throw(Bo
 
 
 # DataFrame constructor, using Arrow objects
-function DataFrame(s::Source)
-    DataFrame((Symbol(h)=>constructcolumn(s,i) for (i,h) ∈ enumerate(Data.header(s)))...)
+DataFrame(s::Source) = DataFrame((Symbol(h)=>s.columns[i] for (i,h) ∈ enumerate(Data.header(s)))...)
+
+
+"""
+    Feather.read(file::AbstractString)
+
+Create a `DataFrame` representing the Feather file `file`.  This data frame will use `ArrowVector`s to
+refer to data within the feather file.  By default this is memory mapped and no data is actually read
+from disk until a particular field of the dataframe is accessed.
+
+To copy the entire file into memory, instead use `materialize`.
+"""
+read(file::AbstractString) = DataFrame(Source(file))
+
+
+"""
+    Feather.materialize(file::AbstractString)
+
+Read a feather file into memory and return it as a `DataFrame`. For most purposes, it is recommended
+that you use `read` instead so that data is read off disk only as necessary.
+"""
+materialize(s::Source) = DataFrame((Symbol(h)=>s.columns[i][:] for (i,h) ∈ enumerate(Data.header(s)))...)
+materialize(file::AbstractString) = materialize(Source(file))
+#=====================================================================================================
+    DataStreams interface
+=====================================================================================================#
+Data.streamtype(::Type{Source}, ::Type{Data.Field}) = true
+Data.streamtype(::Type{Source}, ::Type{Data.Column}) = true
+Data.accesspattern(::Source) = Data.RandomAccess
+
+Data.reference(s::Source) = s.data
+function Data.isdone(s::Source, row::Integer, col::Integer, rows::Integer, cols::Integer)
+    col > cols || row > rows
 end
+function Data.isdone(s::Source, row::Integer, col::Integer)
+    rows, cols = size(s)
+    Data.isdone(s, row, col, rows, cols)
+end
+
+function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{T}, row::Integer, col::Integer) where T
+    s.columns[col][row]
+end
+Data.streamfrom(s::Source, ::Type{Data.Column}, ::Type{T}, col::Integer) where T = s.columns[col][:]
 
 
 #=====================================================================================================
@@ -120,3 +163,6 @@ function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     constructcolumn(T, s.data, getcolumn(s, col))
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)
+constructcolumn(s::Source, col::AbstractString) = constructcolumn(s, s.schema[col])
+
+constructall(s::Source) = ArrowVector[constructcolumn(s, i) for i ∈ 1:size(s,2)]

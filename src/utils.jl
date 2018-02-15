@@ -17,9 +17,9 @@ function checkfilelength(filename::AbstractString, data::AbstractVector{UInt8})
     end
 end
 
-function loadfile(filename::AbstractString)
+function loadfile(filename::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
     isfile(filename) || throw(ArgumentError("'$file' is not a valid file."))
-    data = Mmap.mmap(filename)
+    data = SHOULD_USE_MMAP ? Mmap.mmap(filename) : read(filename)
     checkmagic(filename, data)
     checkfilelength(filename, data)
     data

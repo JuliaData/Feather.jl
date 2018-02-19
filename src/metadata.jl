@@ -77,7 +77,7 @@ end # module
 # wesm/feather/cpp/src/metadata_generated.h
 # wesm/feather/cpp/src/types.h
 const JULIA_TYPE_DICT = Dict{Metadata.DType,DataType}(
-    Metadata.BOOL      => Arrow.Bool,
+    Metadata.BOOL      => Bool,
     Metadata.INT8      => Int8,
     Metadata.INT16     => Int16,
     Metadata.INT32     => Int32,

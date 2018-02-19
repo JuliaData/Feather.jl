@@ -11,7 +11,6 @@ mutable struct Sink <: Data.Sink
     columns::Vector{ArrowVector}
 end
 
-# TODO change default IO
 function Sink(filename::AbstractString, sch::Data.Schema=Data.Schema(),
               cols::AbstractVector{<:ArrowVector}=Vector{ArrowVector}(size(sch,2));
               description::AbstractString="", metadata::AbstractString="")
@@ -40,6 +39,18 @@ size(sink::Sink) = size(sink.schema)
 size(sink::Sink, i::Integer) = size(sink.schema, i)
 
 
+"""
+    write(filename::AbstractString, df::DataFrame)
+
+Write the dataframe `df` to the feather formatted file `filename`.
+"""
+function write(filename::AbstractString, df::AbstractDataFrame)
+    sink = Feather.Sink(filename, df)
+    Data.stream!(df, sink)
+    Data.close!(sink)
+end
+
+
 function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{T}, row, col) where T
     sink.columns[col] = arrowformat(val)
 end
@@ -59,6 +70,8 @@ writecontents(io::IO, A::NullablePrimitive) = writepadded(io, A, bitmask, values
 writecontents(io::IO, A::List) = writepadded(io, A, offsets, values)
 writecontents(io::IO, A::NullableList) = writepadded(io, A, bitmask, offsets, values)
 writecontents(io::IO, A::DictEncoding) = writepadded(io, A, references)
+writecontents(io::IO, A::BitPrimitive) = writepadded(io, A, values)
+writecontents(io::IO, A::NullableBitPrimitive) = writepadded(io, A, bitmask, values)
 function writecontents(::Type{Metadata.PrimitiveArray}, io::IO, A::ArrowVector)
     a = position(io)
     writecontents(io, A)

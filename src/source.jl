@@ -128,6 +128,12 @@ function Arrow.NullableList(::Type{T}, data::Vector{UInt8}, p::Metadata.Primitiv
     q = Primitive{UInt8}(data, valuesloc(p), valueslength(p))
     NullableList{T}(data, bitmaskloc(p), offsetsloc(p), length(p), q)
 end
+function Arrow.BitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveArray)
+    BitPrimitive(data, valuesloc(p), length(p))
+end
+function Arrow.NullableBitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveArray)
+    NullableBitPrimitive(data, bitmaskloc(p), valuesloc(p), length(p))
+end
 
 arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T = Primitive(T, data, p)
 function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
@@ -139,6 +145,10 @@ end
 function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
                     ) where T<:AbstractString
     NullableList(T, data, p)
+end
+arrowvector(::Type{Bool}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) = BitPrimitive(data, p)
+function arrowvector(::Type{Union{Bool,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray)
+    NullableBitPrimitive(data, p)
 end
 
 

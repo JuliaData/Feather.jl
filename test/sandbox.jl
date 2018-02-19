@@ -17,13 +17,26 @@ using Feather
 #                F=vcat([DateTime(2018)+Dates.Second(i) for i ∈ 0:2], [missing]), G=v,
 #                H=Arrow.TimeOfDay{Dates.Millisecond,Int32}[Dates.Time(1) + Dates.Minute(i) for i ∈ 0:3])
 
-df = DataFrame(A=[true, false, true, false, true],
-               B=[true, missing, false, missing, true])
+# df = DataFrame(A=[true, false, true, false, true],
+#                B=[true, missing, false, missing, true])
+# 
+# 
+# Feather.write("booltest.feather", df)
+# 
+# 
+# src = Feather.Source("booltest.feather")
+# odf = DataFrame(src)
 
 
-Feather.write("booltest.feather", df)
+src = Feather.Source("data/attenu.feather")
+col = src.ctable.columns[3]
+df = DataFrame(src)
+
+odf = Feather.write("test1.feather", df)
+
+src2 = Feather.Source("test1.feather")
+col2 = src2.ctable.columns[3]
+df2 = DataFrame(src2)
 
 
-src = Feather.Source("booltest.feather")
-odf = DataFrame(src)
 

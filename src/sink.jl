@@ -60,9 +60,12 @@ function Metadata.PrimitiveArray(A::ArrowVector{J}, off::Integer, nbytes::Intege
     Metadata.PrimitiveArray(feathertype(J), Metadata.PLAIN, off, length(A), nullcount(A), nbytes)
 end
 function Metadata.PrimitiveArray(A::DictEncoding, off::Integer, nbytes::Integer)
-    Metadata.PrimitiveArray(feathertype(eltype(references(A))), Metadata.PLAIN, off, length(A), 0,
-                            nbytes)
+    Metadata.PrimitiveArray(feathertype(eltype(references(A))), Metadata.PLAIN, off, length(A),
+                            nullcount(A), nbytes)
 end
+
+
+# TODO DictEncoding is totally fucked up!!!
 
 
 writecontents(io::IO, A::Primitive) = writepadded(io, A)

@@ -7,22 +7,18 @@ else
 end
 
 testdir = joinpath(dirname(@__FILE__), "data")
-testdir2 = joinpath(dirname(@__FILE__), "newdata")
 # testdir = joinpath(Pkg.dir("Feather"), "test/data")
-# testdir2 = joinpath(Pkg.dir("Feather"), "test/newdata")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
-append!(files, map(x -> joinpath(testdir2, x), readdir(testdir2)))
 
 temps = []
 
 for f in files
     println("tesing $f...")
     source = Feather.Source(f)
-    df = Feather.read(source)
+    df = DataFrame(source)
     temp = tempname()
     push!(temps, temp)
-    sink = Feather.Sink(temp)
-    sink = Feather.write(sink, df)
+    sink = Feather.write(temp, df)
     df2 = Feather.read(temp)
 
     for (c1,c2) in zip(df.columns, df2.columns)
@@ -41,7 +37,7 @@ for f in files
         @test col1.user_metadata == col2.user_metadata
 
         v1 = col1.values; v2 = col2.values
-        @test v1.type_ == v2.type_
+        @test v1.dtype == v2.dtype
         @test v1.encoding == v2.encoding
         # @test v1.offset == v2.offset # currently not python/R compatible due to wesm/feather#182
         @test v1.length == v2.length

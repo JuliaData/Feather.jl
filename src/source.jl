@@ -134,6 +134,12 @@ end
 function Arrow.NullableBitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveArray)
     NullableBitPrimitive(data, bitmaskloc(p), valuesloc(p), length(p))
 end
+function Arrow.DictEncoding(::Type{T}, data::Vector{UInt8}, col::Metadata.Column
+                           ) where {J,T<:Union{J,Union{J,Missing}}}
+    lvls = arrowvector(J, data, col.metadata.levels)
+    DictEncoding{T}(data, valuesloc(col.values), length(col.values), lvls)
+end
+
 
 arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T = Primitive(T, data, p)
 function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
@@ -151,11 +157,6 @@ function arrowvector(::Type{Union{Bool,Missing}}, data::Vector{UInt8}, p::Metada
     NullableBitPrimitive(data, p)
 end
 
-
-function Arrow.DictEncoding(::Type{T}, data::Vector{UInt8}, col::Metadata.Column) where T
-    lvls = arrowvector(T, data, col.metadata.levels)
-    DictEncoding{T}(data, valuesloc(col.values), length(col.values), lvls)
-end
 
 
 function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::K, col::Metadata.Column) where {T,K}

@@ -31,12 +31,25 @@ using Feather
 src = Feather.Source("data/attenu.feather")
 col = src.ctable.columns[3]
 df = DataFrame(src)
+v = df[:station]
 
 odf = Feather.write("test1.feather", df)
 
 src2 = Feather.Source("test1.feather")
 col2 = src2.ctable.columns[3]
 df2 = DataFrame(src2)
+v2 = df2[:station]
+
+
+# v = categorical(["ab", "abc", missing, "ab", "abcd"])
+# d = DictEncoding(v)
+
+# df = DataFrame(A=d)
+# Feather.write("dicttest.feather", df)
+
+# src = Feather.Source("dicttest.feather")
+# col = src.ctable.columns[1]
+# odf = DataFrame(src)
 
 
 

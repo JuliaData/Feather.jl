@@ -153,7 +153,7 @@ Data.reference(source::Feather.Source) = source.data
 Data.isdone(io::Feather.Source, row, col, rows, cols) =  col > cols || row > rows
 function Data.isdone(io::Source, row, col)
     rows, cols = size(Data.schema(io))
-    return isdone(io, row, col, rows, cols)
+    return Data.isdone(io, row, col, rows, cols)
 end
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Column}) = true
 Data.streamtype(::Type{<:Feather.Source}, ::Type{Data.Field}) = true

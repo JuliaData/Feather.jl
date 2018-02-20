@@ -33,7 +33,6 @@ import Arrow.nullcount
 const FEATHER_VERSION = 2
 # wesm/feather/cpp/src/common.h
 const FEATHER_MAGIC_BYTES = Vector{UInt8}("FEA1")
-const BITMASK = UInt8[1, 2, 4, 8, 16, 32, 64, 128]
 const ALIGNMENT = 8
 const SHOULD_USE_MMAP = !iswindows()
 

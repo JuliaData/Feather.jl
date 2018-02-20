@@ -65,9 +65,6 @@ function Metadata.PrimitiveArray(A::DictEncoding, off::Integer, nbytes::Integer)
 end
 
 
-# TODO DictEncoding is totally fucked up!!!
-
-
 writecontents(io::IO, A::Primitive) = writepadded(io, A)
 writecontents(io::IO, A::NullablePrimitive) = writepadded(io, A, bitmask, values)
 writecontents(io::IO, A::List) = writepadded(io, A, offsets, values)

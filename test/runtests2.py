@@ -23,6 +23,9 @@ class TestFeather(unittest.TestCase):
         self.assertEqual(df2["Afloat64"][0], np.inf)
         self.assertEqual(df2["Afloat64"][1], 1.0)
         self.assertEqual(df2["Afloat64"][2], 0.0)
+        self.assertEqual(df2["Afloat64cat"][0], np.inf)
+        self.assertEqual(df2["Afloat64cat"][1], 1.0)
+        self.assertEqual(df2["Afloat64cat"][2], 0.0)
 
 if __name__ == '__main__':
     unittest.main()

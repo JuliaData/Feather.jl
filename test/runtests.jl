@@ -50,6 +50,50 @@ for f in files
     end
 end
 
+function test_non_string_categories()
+    fn = joinpath(testdir2, "int_categories.feather")
+
+    levels_2 = [
+        2, 6, 8, 9, 32, 34, 36, 47, 50, 59, 61, 62, 63, 69, 72, 79, 87, 89, 90,
+        97, 111, 112, 117, 123, 124, 125, 126, 128, 129, 130, 136, 158, 174,
+        182, 184, 185, 194, 199, 201, 210, 212, 221, 223, 236, 248, 257, 265,
+        271, 295, 313, 315, 328, 770, 827, 839, 843, 844, 855, 858, 859, 863,
+        869, 873, 879, 889, 903, 4901, 4903, 4904, 4918, 4926, 4931, 4954,
+        4960, 4999, 5850, 5851, 5917, 5999, 6901, 6904, 6907, 6914, 6918, 8102,
+        8103, 8106, 8199, 9104, 9651, 9699
+    ]
+
+    source = Feather.Source(fn)
+    @test length(source.levels) == 2
+    @test source.levels[1] == collect(2006:2015)
+    @test source.levels[2] == levels_2  # too long to hard-code
+    @test source.orders == Dict(k => false for k in 1:2)
+
+    df = Feather.read(source);
+    want = DataFrame(
+        year=CategoricalArray{Int64,1}(
+            Int8[1, 2, 3, 4, 6, 7, 8, 10],
+            CategoricalPool{Int64,Int8}(Int64.(2006:2015), false)
+        ),
+        id1=CategoricalArray{Int64,1}(
+            Int8[87, 21, 77, 77, 81, 81, 82, 67],
+            CategoricalPool{Int64,Int8}(levels_2, false)
+        ),
+        id2=[12493, 4846710, 72400, 2395406, 766873, 4578402, 3387985, 3519757]
+    )
+    @test want == df
+
+    # Feather.write
+    temp = tempname()
+    sink = Feather.Sink(temp)
+    sink = Feather.write(sink, df)
+    df2 = Feather.read(temp)
+    @test df == df2 == want
+    rm(temp)
+
+end
+test_non_string_categories()
+
 gc(); gc()
 for t in temps
     rm(t)
@@ -93,12 +137,15 @@ try
     run(`docker cp feathertest:/home/test.feather test.feather`)
     global df = Feather.read("test.feather")
 
+    f64cat = CategoricalArray{Float64,1,Int8}([Inf, 1.0, 0.0])
+
     @test df[:Autf8] == ["hey","there","sailor"]
     @test df[:Abool] == [true, true, false]
     @test df[:Acat] == CategoricalArray(["a","b","c"])
     @test df[:Acatordered] == CategoricalArray(["d","e","f"])
     @test df[:Adatetime] == [Dates.DateTime(2016,1,1), Dates.DateTime(2016,1,2), Dates.DateTime(2016,1,3)]
     @test isequal(df[:Afloat32], [1.0, missing, 0.0])
+    @test isequal(df[:Afloat64cat], f64cat)
     @test df[:Afloat64] == [Inf,1.0,0.0]
 
     df_ = Feather.read("test.feather"; nullable=false, use_mmap=false)
@@ -113,6 +160,7 @@ try
     @test df2[:Acatordered] == CategoricalArrays.CategoricalArray(["d","e","f"])
     @test df2[:Adatetime] == [Dates.DateTime(2016,1,1), Dates.DateTime(2016,1,2), Dates.DateTime(2016,1,3)]
     @test isequal(df2[:Afloat32], [1.0, missing, 0.0])
+    @test isequal(df2[:Afloat64cat], f64cat)
     @test df2[:Afloat64] == [Inf,1.0,0.0]
 
     println("Read test2.feather into python...")

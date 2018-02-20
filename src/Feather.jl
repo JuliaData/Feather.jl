@@ -55,10 +55,15 @@ function writepadded(io, x::Vector{String})
     return bw + diff
 end
 
-juliastoragetype(meta::Void, values_type) = Type_2julia[values_type]
+juliastoragetype(meta::Void, values_type::Metadata.Type_) = Type_2julia[values_type]
 function juliastoragetype(meta::Metadata.CategoryMetadata, values_type)
     R = Type_2julia[values_type]
-    return CategoricalString{R}
+    level_type = meta.levels.type_
+    if level_type in NON_PRIMITIVE_TYPES
+        return CategoricalString{R}
+    end
+    V = Type_2julia[level_type]
+    CategoricalValue{V,R}
 end
 juliastoragetype(meta::Metadata.TimestampMetadata, values_type) = Arrow.Timestamp{TimeUnit2julia[meta.unit],meta.timezone == "" ? :UTC : Symbol(meta.timezone)}
 juliastoragetype(meta::Metadata.DateMetadata, values_type) = Arrow.Date
@@ -80,6 +85,13 @@ function addlevels!(::Type{T}, catlevels, orders, i, meta, values_type, data, ve
     return
 end
 
+function addlevels!(::Type{<:CategoricalValue{V,R}}, catlevels, orders, i, meta, values_type, data, version) where {V, R}
+    ptr = convert(Ptr{V}, pointer(data) + meta.levels.offset)
+    catlevels[i] = [unsafe_load(ptr, i) for i in 1:meta.levels.length]
+    orders[i] = meta.ordered
+    return
+end
+
 schematype(::Type{T}, nullcount, nullable, wrs) where {T} = ifelse(nullcount == 0 && !nullable, T, Union{T, Missing})
 schematype(::Type{<:AbstractString}, nullcount, nullable, wrs) = (s = ifelse(wrs, WeakRefString{UInt8}, String); return ifelse(nullcount == 0 && !nullable, s, Union{s, Missing}))
 schematype(::Type{CategoricalString{R}}, nullcount, nullable, wrs) where {R} = ifelse(nullcount == 0 && !nullable, CategoricalString{R}, Union{CategoricalString{R}, Missing})
@@ -91,7 +103,7 @@ mutable struct Source{S, T} <: Data.Source
     ctable::Metadata.CTable
     data::Vector{UInt8}
     # ::S # separate from the types in schema, since we need to convert between feather storage types & julia types
-    levels::Dict{Int,Vector{String}}
+    levels::Dict{Int,Vector}  # TODO: use namedtuple on julia v0.7+
     orders::Dict{Int,Bool}
     columns::T # holds references to pre-fetched columns for Data.getfield
 end
@@ -107,6 +119,14 @@ if iswindows()
     const should_use_mmap = false
 else
     const should_use_mmap = true
+end
+
+function metadata_bytes(fn::AbstractString)
+    m = Base.read(fn)
+    metalength = Base.read(IOBuffer(m[length(m)-7:length(m)-4]), Int32)
+    metapos = length(m) - (metalength + 7)
+    rootpos = Base.read(IOBuffer(m[metapos:metapos+4]), Int32)
+    return m[metapos:end-8]
 end
 
 function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool=true, use_mmap::Bool=should_use_mmap)
@@ -126,7 +146,7 @@ function Source(file::AbstractString; nullable::Bool=false, weakrefstrings::Bool
     types = Type[]
     juliatypes = Type[]
     columns = ctable.columns
-    levels = Dict{Int,Vector{String}}()
+    levels = Dict{Int,Vector}()
     orders = Dict{Int,Bool}()
     for (i, col) in enumerate(columns)
         push!(header, col.name)
@@ -145,6 +165,8 @@ end
 # DataStreams interface
 # allocate(::Type{T}, rows, ref) where {T} = Vector{T}(rows)
 # allocate(::Type{T}, rows, ref) where {T <: Union{WeakRefString,Missing}} = WeakRefStringArray(ref, T, rows)
+Data.allocate(::Type{CategoricalValue{V,R}}, rows, ref) where {V,R} = CategoricalArray{V, 1, R}(rows)
+Data.allocate(::Type{Union{CategoricalValue{V,R}, Missing}}, rows, ref) where {V,R} = CategoricalArray{Union{V, Missing}, 1, R}(rows)
 Data.allocate(::Type{CategoricalString{R}}, rows, ref) where {R} = CategoricalArray{String, 1, R}(rows)
 Data.allocate(::Type{Union{CategoricalString{R}, Missing}}, rows, ref) where {R} = CategoricalArray{Union{String, Missing}, 1, R}(rows)
 
@@ -175,6 +197,7 @@ end
 transform!(::Type{T}, A, len) where {T} = A
 transform!(::Type{Dates.Date}, A, len) = map(x->Arrow.unix2date(x), A)
 transform!(::Type{Dates.DateTime}, A::Vector{Arrow.Timestamp{P,Z}}, len) where {P, Z} = map(x->Arrow.unix2datetime(P, x), A)
+transform!(::Type{CategoricalValue{V,R}}, A, len) where {V,R} = map(x->x + R(1), A)
 transform!(::Type{CategoricalString{R}}, A, len) where {R} = map(x->x + R(1), A)
 function transform!(::Type{Bool}, A, len)
     B = falses(len)
@@ -248,6 +271,19 @@ end
     pool = CategoricalPool{String, R}(source.levels[col], source.orders[col])
     return CategoricalArray{Union{String, Missing},1}(refs, pool)
 end
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{CategoricalValue{V,R}}, row, col) where {V,R}
+    checknonull(source, col)
+    refs = transform!(CategoricalValue{V,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+    pool = CategoricalPool{V, R}(source.levels[col], source.orders[col])
+    return CategoricalArray{V,1}(refs, pool)
+end
+@inline function Data.streamfrom(source::Source, ::Type{Data.Column}, ::Type{Union{CategoricalValue{V,R}, Missing}}, row, col) where {V,R}
+    refs = transform!(CategoricalValue{V,R}, unwrap(source, R, col, source.ctable.num_rows), source.ctable.num_rows)
+    bools = getbools(source, col)
+    refs = R[ifelse(bools[i], R(0), refs[i]) for i = 1:source.ctable.num_rows]
+    pool = CategoricalPool{V, R}(source.levels[col], source.orders[col])
+    return CategoricalArray{Union{V, Missing},1}(refs, pool)
+end
 
 """
 `Feather.read{T <: Data.Sink}(file, sink_type::Type{T}, sink_args...; weakrefstrings::Bool=true)` => `T`
@@ -296,6 +332,7 @@ read(source::Feather.Source, sink::T; append::Bool=false, transforms::Dict=Dict{
 # writing feather files
 feathertype(::Type{T}) where {T} = Feather.julia2Type_[T]
 feathertype(::Type{Union{T, Missing}}) where {T} = feathertype(T)
+feathertype(::Type{CategoricalValue{V,R}}) where {V,R} = julia2Type_[R]
 feathertype(::Type{CategoricalString{R}}) where {R} = julia2Type_[R]
 feathertype(::Type{<:Arrow.Time}) = Metadata.INT64
 feathertype(::Type{Dates.Date}) = Metadata.INT32
@@ -322,6 +359,15 @@ function getmetadata(io, ::Type{CategoricalString{R}}, A) where {R}
     return Metadata.CategoryMetadata(Metadata.PrimitiveArray(Metadata.UTF8, Metadata.PLAIN, offset, len, 0, total_bytes), isordered(A))
 end
 
+function getmetadata(io, ::Type{CategoricalValue{V,R}}, A) where {V,R}
+    lvls = CategoricalArrays.levels(A)
+    len = length(lvls)
+    offset = position(io)
+    total_bytes = writepadded(io, lvls)
+    prim = Metadata.PrimitiveArray(julia2Type_[V], Metadata.PLAIN, offset, len, 0, total_bytes)
+    return Metadata.CategoryMetadata(prim, isordered(A))
+end
+
 values(A::Vector) = A
 values(A::CategoricalArray{T,1,R}) where {T, R} = map(x-> x - R(1), A.refs)
 
@@ -338,6 +384,12 @@ function writecolumn(io, ::Type{CategoricalString{R}}, A) where {R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 function writecolumn(io, ::Type{Union{CategoricalString{R}, Missing}}, A) where {R}
+    return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
+end
+function writecolumn(io, ::Type{CategoricalValue{V,R}}, A) where {V,R}
+    return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
+end
+function writecolumn(io, ::Type{Union{CategoricalValue{V,R}, Missing}}, A) where {V,R}
     return writepadded(io, view(reinterpret(UInt8, values(A)), 1:(length(A) * sizeof(R))))
 end
 # Date

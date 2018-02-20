@@ -52,12 +52,27 @@ read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(fi
 
 
 """
-    Feather.materialize(file::AbstractString)
+    Feather.materialize(s::Feather.Source[, rows, cols])
+    Feather.materialize(file::AbstractString[, rows, cols])
 
-Read a feather file into memory and return it as a `DataFrame`. For most purposes, it is recommended
-that you use `read` instead so that data is read off disk only as necessary.
+Read a feather file into memory and return it as a `DataFrame`.  Optionally one may only read in
+particular rows or columns (these should be specified with `AbstractVector`s, columns can be either
+integers or `Symbol`s).
+
+For most purposes, it is recommended that you use `read` instead so that data is read off
+disk only as necessary.
 """
-materialize(s::Source) = DataFrame((Symbol(h)=>s.columns[i][:] for (i,h) ∈ enumerate(Data.header(s)))...)
+function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractVector{<:Integer})
+    DataFrame((Symbol(s.schema.header[i])=>s.columns[i][rows] for i ∈ cols)...)
+end
+function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractVector{Symbol})
+    cols = Int[s.schema[string(c)] for c ∈ cols]
+    materialize(s, rows, cols)
+end
+materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
+function materialize(file::AbstractString, rows::AbstractVector, cols::AbstractVector)
+    materialize(Source(file), rows, cols)
+end
 materialize(file::AbstractString) = materialize(Source(file))
 #=====================================================================================================
     DataStreams interface

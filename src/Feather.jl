@@ -19,8 +19,6 @@ else
     iswindows = Sys.iswindows
 end
 
-# TODO for now we are not compatible with old feather files (that don't pad length)
-
 export Data
 
 import Base: length, size, read, write

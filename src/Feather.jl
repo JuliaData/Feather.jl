@@ -2,7 +2,7 @@ __precompile__(true)
 module Feather
 
 using Arrow
-using FlatBuffers, Missings, WeakRefStrings, CategoricalArrays, DataStreams, DataFrames
+using FlatBuffers, Missings, CategoricalArrays, DataStreams, DataFrames
 
 
 if Base.VERSION < v"0.7.0-DEV.2575"

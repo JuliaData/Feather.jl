@@ -14,8 +14,8 @@ function Source(file::AbstractString, sch::Data.Schema{R,T}, ctable::Metadata.CT
     s.columns = constructall(s)
     s
 end
-function Source(file::AbstractString)
-    data = loadfile(file)
+function Source(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
+    data = loadfile(file, use_mmap=use_mmap)
     ctable = getctable(data)
     sch = Data.schema(ctable)
     Source(file, sch, ctable, data)
@@ -48,7 +48,7 @@ from disk until a particular field of the dataframe is accessed.
 
 To copy the entire file into memory, instead use `materialize`.
 """
-read(file::AbstractString) = DataFrame(Source(file))
+read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(file, use_mmap=use_mmap))
 
 
 """

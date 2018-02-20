@@ -113,7 +113,7 @@ const MDATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
     Dates.Time => Metadata.INT64,
     Dates.DateTime => Metadata.INT64,
     Dates.Date => Metadata.INT32,
-    WeakRefString{UInt8} => Metadata.UTF8
+    # WeakRefString{UInt8} => Metadata.UTF8  # not currently being used
 )
 
 const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8, Metadata.BINARY])

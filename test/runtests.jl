@@ -94,8 +94,8 @@ try
 
     @test df[:Autf8][:] == ["hey","there","sailor"]
     @test df[:Abool][:] == [true, true, false]
-    # @test df[:Acat][:] == ["a","b","c"]  # these violate Arrow standard by using Int8!!
-    # @test df[:Acatordered][:] == ["d","e","f"]  # these violate Arrow standard by using Int8!!
+    @test df[:Acat][:] == categorical(["a","b","c"])  # these violate Arrow standard by using Int8!!
+    @test df[:Acatordered][:] == categorical(["d","e","f"])  # these violate Arrow standard by using Int8!!
     @test convert(Vector{DateTime}, df[:Adatetime][:]) == dts
     @test isequal(df[:Afloat32][:], [1.0, missing, 0.0])
     @test df[:Afloat64][:] == [Inf,1.0,0.0]
@@ -108,8 +108,8 @@ try
 
     @test df2[:Autf8][:] == ["hey","there","sailor"]
     @test df2[:Abool][:] == [true, true, false]
-    # @test df2[:Acat][:] == ["a","b","c"]  # these violate Arrow standard by using Int8!!
-    # @test df2[:Acatordered][:] == ["d","e","f"]  # these violate Arrow standard by using Int8!!
+    @test df2[:Acat][:] == categorical(["a","b","c"])  # these violate Arrow standard by using Int8!!
+    @test df2[:Acatordered][:] == categorical(["d","e","f"])  # these violate Arrow standard by using Int8!!
     @test convert(Vector{DateTime}, df2[:Adatetime][:]) == dts
     @test isequal(df2[:Afloat32][:], [1.0, missing, 0.0])
     @test df2[:Afloat64][:] == [Inf,1.0,0.0]

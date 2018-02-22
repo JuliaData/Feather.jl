@@ -27,6 +27,14 @@ Data.types(s::Source{S}) where S = Tuple(S.parameters)
 
 getcolumn(s::Source, col::Integer) = s.ctable.columns[col]
 
+colnumber(s::Source, col::Integer) = col
+colnumber(s::Source, col::String) = s.schema[col]
+colnumber(s::Source, col::Symbol) = colnumber(s, string(col))
+
+colname(s::Source, col::Integer) = Symbol(s.schema.header[col])
+colname(s::Source, col::String) = Symbol(col)
+colname(s::Source, col::Symbol) = col
+
 size(s::Source) = size(s.schema)
 size(s::Source, i::Integer) = size(s.schema, i)
 
@@ -36,7 +44,7 @@ checkcolbounds(s::Source, col::Integer) = (1 ≤ col ≤ size(s, 2)) || throw(Bo
 
 
 # DataFrame constructor, using Arrow objects
-DataFrame(s::Source) = DataFrame((Symbol(h)=>s.columns[i] for (i,h) ∈ enumerate(Data.header(s)))...)
+DataFrame(s::Source) = DataFrame((colname(s,i)=>s.columns[i] for i ∈ 1:size(s,2))...)
 
 
 """
@@ -51,6 +59,7 @@ To copy the entire file into memory, instead use `materialize`.
 read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(file, use_mmap=use_mmap))
 
 
+# TODO update docs
 """
     Feather.materialize(s::Feather.Source[, rows, cols])
     Feather.materialize(file::AbstractString[, rows, cols])
@@ -62,17 +71,29 @@ integers or `Symbol`s).
 For most purposes, it is recommended that you use `read` instead so that data is read off
 disk only as necessary.
 """
-function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractVector{<:Integer})
-    DataFrame((Symbol(s.schema.header[i])=>s.columns[i][rows] for i ∈ cols)...)
+materialize(A::ArrowVector{T}) where T = convert(Vector{T}, A)
+materialize(A::DictEncoding{T}) where T = Arrow.categorical(A)
+materialize(A::ArrowVector, idx::AbstractVector{<:Integer}) = A[idx]
+materialize(A::DictEncoding, idx::AbstractVector{<:Integer}) = Arrow.categorical(A, idx)
+
+materialize(s::Source, col::Union{Symbol,<:Integer}) = materialize(s.columns[colnumber(s,col)])
+function materialize(s::Source, rows::AbstractVector{<:Integer}, col::Union{Symbol,<:Integer})
+    materialize(s.columns[colnumber(s,col)], rows)
 end
-function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractVector{Symbol})
-    cols = Int[s.schema[string(c)] for c ∈ cols]
-    materialize(s, rows, cols)
+
+function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractVector{T}
+                    ) where {T<:Union{Symbol,<:Integer}}
+    DataFrame((colname(s,col)=>materialize(s,rows,col) for col ∈ cols)...)
 end
-materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
-function materialize(file::AbstractString, rows::AbstractVector, cols::AbstractVector)
+function materialize(file::AbstractString, rows::AbstractVector{<:Integer}, cols::AbstractVector{T}
+                    ) where {T<:Union{Symbol,<:Integer}}
     materialize(Source(file), rows, cols)
 end
+function materialize(s::Source, cols::AbstractVector{<:Union{Symbol,<:Integer}})
+    materialize(s, 1:size(s,1), cols)
+end
+
+materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
 materialize(file::AbstractString) = materialize(Source(file))
 #=====================================================================================================
     DataStreams interface
@@ -151,12 +172,12 @@ function Arrow.NullableBitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveAr
 end
 
 function Arrow.DictEncoding(::Type{J}, data::Vector{UInt8}, col::Metadata.Column) where J
-    refs = arrowvector(Int32, data, col.values)
+    refs = arrowvector(juliatype(col.values.dtype), data, col.values)
     lvls = arrowvector(J, data, col.metadata.levels)
     DictEncoding{J}(refs, lvls)
 end
 function Arrow.DictEncoding(::Type{Union{J,Missing}}, data::Vector{UInt8}, col::Metadata.Column) where J
-    refs = arrowvector(Union{Int32,Missing}, data, col.values)
+    refs = arrowvector(Union{juliatype(col.values.dtype),Missing}, data, col.values)
     lvls = arrowvector(J, data, col.metadata.levels)
     DictEncoding{Union{J,Missing}}(refs, lvls)
 end

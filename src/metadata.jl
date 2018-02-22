@@ -131,6 +131,7 @@ isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
 
 
 juliatype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
+juliatype(values_type::Metadata.DType) = juliatype(nothing, values_type)
 function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
     JULIA_TYPE_DICT[meta.levels.dtype]
 end

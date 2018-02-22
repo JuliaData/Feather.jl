@@ -28,17 +28,17 @@ using Feather
 # odf = DataFrame(src)
 
 
-src = Feather.Source("data/attenu.feather")
-col = src.ctable.columns[3]
-df = DataFrame(src)
-v = df[:station]
-
-odf = Feather.write("test1.feather", df)
-
-src2 = Feather.Source("test1.feather")
-col2 = src2.ctable.columns[3]
-df2 = DataFrame(src2)
-v2 = df2[:station]
+# src = Feather.Source("data/attenu.feather")
+# col = src.ctable.columns[3]
+# df = DataFrame(src)
+# v = df[:station]
+# 
+# odf = Feather.write("test1.feather", df)
+# 
+# src2 = Feather.Source("test1.feather")
+# col2 = src2.ctable.columns[3]
+# df2 = DataFrame(src2)
+# v2 = df2[:station]
 
 
 # v = categorical(["ab", "abc", missing, "ab", "abcd"])
@@ -51,5 +51,6 @@ v2 = df2[:station]
 # col = src.ctable.columns[1]
 # odf = DataFrame(src)
 
+src = Feather.Source("test.feather")
 
 

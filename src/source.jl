@@ -71,6 +71,7 @@ integers or `Symbol`s).
 For most purposes, it is recommended that you use `read` instead so that data is read off
 disk only as necessary.
 """
+materialize(x) = x
 materialize(A::ArrowVector{T}) where T = convert(Vector{T}, A)
 materialize(A::DictEncoding{T}) where T = Arrow.categorical(A)
 materialize(A::ArrowVector, idx::AbstractVector{<:Integer}) = A[idx]
@@ -95,6 +96,8 @@ end
 
 materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
 materialize(file::AbstractString) = materialize(Source(file))
+
+materialize(df::DataFrame) = DataFrame((n=>materialize(df[n]) for n ∈ names(df))...)
 #=====================================================================================================
     DataStreams interface
 =====================================================================================================#

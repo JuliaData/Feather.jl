@@ -2,6 +2,7 @@ module Metadata
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     const Dates = Base.Dates
+    using Compat
 else
     import Dates
 end
@@ -48,7 +49,7 @@ mutable struct TimeMetadata
     unit::TimeUnit
 end
 
-@UNION TypeMetadata (Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata)
+@UNION TypeMetadata (Nothing,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata)
 
 mutable struct Column
     name::String
@@ -130,7 +131,7 @@ const MDATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA
 isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
 
 
-juliatype(meta::Void, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
+juliatype(meta::Nothing, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
 juliatype(values_type::Metadata.DType) = juliatype(nothing, values_type)
 function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
     JULIA_TYPE_DICT[meta.levels.dtype]

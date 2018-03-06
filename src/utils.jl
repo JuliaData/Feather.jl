@@ -42,7 +42,7 @@ function getctable(data::AbstractVector{UInt8})
     rootpos = rootposition(data, metapos)
     ctable = FlatBuffers.read(Metadata.CTable, data, metapos + rootpos - 1)
     if ctable.version < FEATHER_VERSION
-        warn("This feather file is old and may not be readable.")
+        @warn("This feather file is old and may not be readable.")
     end
     ctable
 end
@@ -50,8 +50,8 @@ end
 
 function Data.schema(ctable::Metadata.CTable)
     ncols = length(ctable.columns)
-    header = Vector{String}(ncols)
-    types = Vector{Type}(ncols)
+    header = Vector{String}(uninitialized, ncols)
+    types = Vector{Type}(uninitialized, ncols)
     for (i, col) ∈ enumerate(ctable.columns)
         header[i] = col.name
         types[i] = juliatype(col)

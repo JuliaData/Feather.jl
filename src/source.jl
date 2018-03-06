@@ -10,7 +10,7 @@ end
 
 function Source(file::AbstractString, sch::Data.Schema{R,T}, ctable::Metadata.CTable,
                 data::Vector{UInt8}) where {R,T}
-    s = Source{T}(file, sch, ctable, data, Vector{ArrowVector}(0))
+    s = Source{T}(file, sch, ctable, data, Vector{ArrowVector}(uninitialized, 0))
     s.columns = constructall(s)
     s
 end

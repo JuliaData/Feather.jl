@@ -1,7 +1,10 @@
-using Feather, Base.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames
+using Feather, Compat.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames
+using Compat.Random
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     const Dates = Base.Dates
+    using Compat.GC
+    const GC = Compat.GC
 else
     import Dates
 end
@@ -46,7 +49,7 @@ temps = []
     end
 end
 
-gc(); gc()
+GC.gc(); GC.gc()
 for t in temps
     rm(t)
 end
@@ -55,9 +58,9 @@ end
 data = DataFrame(A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
 data[2, :A] = missing
 Feather.write("testfile.feather", data)
-df = Feather.read("testfile.feather")
-@test size(Data.schema(df)) == (100, 2)
-gc();
+dfo = Feather.read("testfile.feather")
+@test size(Data.schema(dfo)) == (100, 2)
+GC.gc();
 rm("testfile.feather")
 
 # check if valid, non-sudo docker is available
@@ -96,7 +99,7 @@ try
     @test df[:Abool][:] == [true, true, false]
     @test df[:Acat][:] == categorical(["a","b","c"])  # these violate Arrow standard by using Int8!!
     @test df[:Acatordered][:] == categorical(["d","e","f"])  # these violate Arrow standard by using Int8!!
-    @test convert(Vector{DateTime}, df[:Adatetime][:]) == dts
+    @test convert(Vector{Dates.DateTime}, df[:Adatetime][:]) == dts
     @test isequal(df[:Afloat32][:], [1.0, missing, 0.0])
     @test df[:Afloat64][:] == [Inf,1.0,0.0]
 
@@ -110,7 +113,7 @@ try
     @test df2[:Abool][:] == [true, true, false]
     @test df2[:Acat][:] == categorical(["a","b","c"])  # these violate Arrow standard by using Int8!!
     @test df2[:Acatordered][:] == categorical(["d","e","f"])  # these violate Arrow standard by using Int8!!
-    @test convert(Vector{DateTime}, df2[:Adatetime][:]) == dts
+    @test convert(Vector{Dates.DateTime}, df2[:Adatetime][:]) == dts
     @test isequal(df2[:Afloat32][:], [1.0, missing, 0.0])
     @test df2[:Afloat64][:] == [Inf,1.0,0.0]
 

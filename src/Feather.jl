@@ -1,22 +1,21 @@
 __precompile__(true)
 module Feather
 
-using Arrow
-using FlatBuffers, Missings, CategoricalArrays, DataStreams, DataFrames
+using Arrow, Compat
+using FlatBuffers, CategoricalArrays, DataStreams, DataFrames
+
+using Compat.Sys: iswindows
 
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     const Dates = Base.Dates
+    using Missings
+    using Compat: @warn
 else
     import Dates
 end
-if Base.VERSION >= v"0.7.0-DEV.2009"
+if Base.VERSION ≥ v"0.7.0-DEV.2009"
     using Mmap
-end
-if Base.VERSION < v"0.7-DEV"
-    iswindows = is_windows
-else
-    iswindows = Sys.iswindows
 end
 
 export Data
@@ -28,7 +27,7 @@ import Arrow.nullcount
 
 const FEATHER_VERSION = 2
 # wesm/feather/cpp/src/common.h
-const FEATHER_MAGIC_BYTES = Vector{UInt8}("FEA1")
+const FEATHER_MAGIC_BYTES = Vector{UInt8}(codeunits("FEA1"))
 const ALIGNMENT = 8
 const SHOULD_USE_MMAP = !iswindows()
 

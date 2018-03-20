@@ -55,6 +55,13 @@ function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{T},
     sink.columns[col] = arrowformat(val)
 end
 
+# NOTE: the below is very inefficient, but we are forced to do it by the Feather format
+function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{Union{T,Missing}},
+                        row, col) where T
+    hasmissing = Compat.findfirst(ismissing, val)
+    sink.columns[col] = arrowformat(hasmissing == nothing ? convert(AbstractVector{T}, val) : val)
+end
+
 
 function Metadata.PrimitiveArray(A::ArrowVector{J}, off::Integer, nbytes::Integer) where J
     Metadata.PrimitiveArray(feathertype(J), Metadata.PLAIN, off, length(A), nullcount(A), nbytes)

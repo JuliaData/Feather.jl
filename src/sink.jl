@@ -12,7 +12,7 @@ mutable struct Sink <: Data.Sink
 end
 
 function Sink(filename::AbstractString, sch::Data.Schema=Data.Schema(),
-              cols::AbstractVector{<:ArrowVector}=Vector{ArrowVector}(uninitialized, size(sch,2));
+              cols::AbstractVector{<:ArrowVector}=Vector{ArrowVector}(undef, size(sch,2));
               description::AbstractString="", metadata::AbstractString="")
     ctable = Metadata.CTable(description, 0, Metadata.Column[], FEATHER_VERSION, metadata)
     io = open(filename, "w+")

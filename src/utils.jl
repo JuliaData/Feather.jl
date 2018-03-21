@@ -50,8 +50,8 @@ end
 
 function Data.schema(ctable::Metadata.CTable)
     ncols = length(ctable.columns)
-    header = Vector{String}(uninitialized, ncols)
-    types = Vector{Type}(uninitialized, ncols)
+    header = Vector{String}(undef, ncols)
+    types = Vector{Type}(undef, ncols)
     for (i, col) ∈ enumerate(ctable.columns)
         header[i] = col.name
         types[i] = juliatype(col)

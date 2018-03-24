@@ -2,26 +2,22 @@
 padding(x::Integer) = div((x + ALIGNMENT - 1), ALIGNMENT)*ALIGNMENT
 getoutputlength(version::Int32, x::Integer) = version < FEATHER_VERSION ? x : padding(x)
 
-function checkmagic(filename::AbstractString, data::AbstractVector{UInt8})
+function validatefile(filename::AbstractString, data::AbstractVector{UInt8})
+    if length(data) < MIN_FILE_LENGTH
+        throw(ArgumentError("'$file' is not in feather format: total length of file: $(length(data))"))
+    end
     header = data[1:4]
     footer = data[(end-3):end]
     if header ≠ FEATHER_MAGIC_BYTES || footer ≠ FEATHER_MAGIC_BYTES
-        throw(ArgumentError("'$filename' is not in feather format: header = $header,
-                            footer = $footer."))
-    end
-end
-
-function checkfilelength(filename::AbstractString, data::AbstractVector{UInt8})
-    if length(data) < 12
-        throw(ArgumentError("'$file' is not in feather format: total length of file: $(length(data))"))
+        throw(ArgumentError(string("'$filename' is not in feather format: header = $header, ",
+                                   "footer = $footer.")))
     end
 end
 
 function loadfile(filename::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
     isfile(filename) || throw(ArgumentError("'$file' is not a valid file."))
     data = SHOULD_USE_MMAP ? Mmap.mmap(filename) : read(filename)
-    checkmagic(filename, data)
-    checkfilelength(filename, data)
+    validatefile(filename, data)
     data
 end
 

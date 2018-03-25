@@ -151,72 +151,36 @@ function offsetsloc(p::Metadata.PrimitiveArray)
     startloc(p) + bitmasklength(p)
 end
 
+# override default offset type
+Locate.Offsets(col::Metadata.PrimitiveArray) = Locate.Offsets{Int32}(offsetsloc(col))
 
-function Arrow.Primitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
-    Primitive{T}(data, valuesloc(p), length(p))
-end
-function Arrow.NullablePrimitive(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive{T}(data, bitmaskloc(p), valuesloc(p), length(p))
-end
-function Arrow.List(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T<:AbstractString
-    q = Primitive{UInt8}(data, valuesloc(p), valueslength(p))
-    List{T}(data, offsetsloc(p), length(p), q)
-end
-function Arrow.NullableList(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
-                           ) where T<:AbstractString
-    q = Primitive{UInt8}(data, valuesloc(p), valueslength(p))
-    NullableList{T}(data, bitmaskloc(p), offsetsloc(p), length(p), q)
-end
-function Arrow.BitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveArray)
-    BitPrimitive(data, valuesloc(p), length(p))
-end
-function Arrow.NullableBitPrimitive(data::Vector{UInt8}, p::Metadata.PrimitiveArray)
-    NullableBitPrimitive(data, bitmaskloc(p), valuesloc(p), length(p))
-end
+Locate.length(col::Metadata.PrimitiveArray) = length(col)
+Locate.values(col::Metadata.PrimitiveArray) = valuesloc(col)
+# this is only relevant for lists, values type must be UInt8
+Locate.valueslength(col::Metadata.PrimitiveArray) = valueslength(col)
+Locate.bitmask(col::Metadata.PrimitiveArray) = bitmaskloc(col)
+Locate.offsets(col::Metadata.PrimitiveArray) = offsetsloc(col)
 
-function Arrow.DictEncoding(::Type{J}, data::Vector{UInt8}, col::Metadata.Column) where J
-    refs = arrowvector(juliatype(col.values.dtype), data, col.values)
-    lvls = arrowvector(J, data, col.metadata.levels)
-    DictEncoding{J}(refs, lvls)
-end
-function Arrow.DictEncoding(::Type{Union{J,Missing}}, data::Vector{UInt8}, col::Metadata.Column) where J
-    refs = arrowvector(Union{juliatype(col.values.dtype),Missing}, data, col.values)
-    lvls = arrowvector(J, data, col.metadata.levels)
-    DictEncoding{Union{J,Missing}}(refs, lvls)
-end
-
-
-arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T = Primitive(T, data, p)
-function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T
-    NullablePrimitive(T, data, p)
-end
-function arrowvector(::Type{T}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) where T<:AbstractString
-    List(T, data, p)
-end
-function arrowvector(::Type{Union{T,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray
-                    ) where T<:AbstractString
-    NullableList(T, data, p)
-end
-arrowvector(::Type{Bool}, data::Vector{UInt8}, p::Metadata.PrimitiveArray) = BitPrimitive(data, p)
-function arrowvector(::Type{Union{Bool,Missing}}, data::Vector{UInt8}, p::Metadata.PrimitiveArray)
-    NullableBitPrimitive(data, p)
-end
-
-
-
-function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::K, col::Metadata.Column) where {T,K}
-    arrowvector(T, data, col.values)
-end
 function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::Metadata.CategoryMetadata,
                          col::Metadata.Column) where T
-    DictEncoding(T, data, col)
+    reftype = juliatype(col.values.dtype)
+    DictEncoding{T}(locate(data, reftype, col.values), locate(data, T, col.metadata.levels))
 end
-function constructcolumn(::Type{T}, data::Vector{UInt8}, col::Metadata.Column) where T
-    constructcolumn(T, data, col.metadata, col)
+function constructcolumn(::Type{Union{T,Missing}}, data::Vector{UInt8}, meta::Metadata.CategoryMetadata,
+                         col::Metadata.Column) where T
+    reftype = Union{juliatype(col.values.dtype),Missing}
+    DictEncoding{Union{T,Missing}}(locate(data, reftype, col.values),
+                                   locate(data, T, col.metadata.levels))
 end
+
+function constructcolumn(::Type{T}, data::Vector{UInt8}, meta, col::Metadata.Column) where T
+    locate(data, T, col.values)
+end
+
 function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     @boundscheck checkcolbounds(s, col)
-    constructcolumn(T, s.data, getcolumn(s, col))
+    col = getcolumn(s, col)
+    constructcolumn(T, s.data, col.metadata, col)
 end
 constructcolumn(s::Source{S}, col::Integer) where S = constructcolumn(s, S.parameters[col], col)
 constructcolumn(s::Source, col::AbstractString) = constructcolumn(s, s.schema[col])

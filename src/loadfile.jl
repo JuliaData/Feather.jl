@@ -1,5 +1,4 @@
 
-padding(x::Integer) = div((x + ALIGNMENT - 1), ALIGNMENT)*ALIGNMENT
 getoutputlength(version::Int32, x::Integer) = version < FEATHER_VERSION ? x : padding(x)
 
 function validatefile(filename::AbstractString, data::AbstractVector{UInt8})

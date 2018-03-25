@@ -139,11 +139,6 @@ end
 
 valueslength(p::Metadata.PrimitiveArray) = p.total_bytes - offsetslength(p) - bitmasklength(p)
 
-valuesloc(p::Metadata.PrimitiveArray) = startloc(p) + bitmasklength(p) + offsetslength(p)
-
-# only makes sense for nullable arrays
-bitmaskloc(p::Metadata.PrimitiveArray) = startloc(p)
-
 function offsetsloc(p::Metadata.PrimitiveArray)
     if isprimitivetype(p.dtype)
         throw(ErrorException("Trying to obtain offset values for primitive array."))
@@ -155,11 +150,10 @@ end
 Locate.Offsets(col::Metadata.PrimitiveArray) = Locate.Offsets{Int32}(offsetsloc(col))
 
 Locate.length(col::Metadata.PrimitiveArray) = length(col)
-Locate.values(col::Metadata.PrimitiveArray) = valuesloc(col)
+Locate.values(col::Metadata.PrimitiveArray) = startloc(col) + bitmasklength(col) + offsetslength(col)
 # this is only relevant for lists, values type must be UInt8
 Locate.valueslength(col::Metadata.PrimitiveArray) = valueslength(col)
-Locate.bitmask(col::Metadata.PrimitiveArray) = bitmaskloc(col)
-Locate.offsets(col::Metadata.PrimitiveArray) = offsetsloc(col)
+Locate.bitmask(col::Metadata.PrimitiveArray) = startloc(col)
 
 function constructcolumn(::Type{T}, data::Vector{UInt8}, meta::Metadata.CategoryMetadata,
                          col::Metadata.Column) where T

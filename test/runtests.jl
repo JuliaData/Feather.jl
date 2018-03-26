@@ -1,12 +1,8 @@
 using Feather, Compat.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames
-using Compat.Random
+using Compat.Random, Compat.Dates, Compat.GC
 
 if Base.VERSION < v"0.7.0-DEV.2575"
-    const Dates = Base.Dates
-    using Compat.GC
     const GC = Compat.GC
-else
-    import Dates
 end
 
 testdir = joinpath(dirname(@__FILE__), "data")

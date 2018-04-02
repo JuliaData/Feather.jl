@@ -16,9 +16,6 @@ julia:
 notifications:
   email: false
 
-install:
-  - julia -e 'Pkg.clone("https://github.com/ExpandingMan/Arrow.jl")'
-
 after_success:
   - julia -e 'cd(Pkg.dir("Feather")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
   - julia -e 'Pkg.add("Documenter")'

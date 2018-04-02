@@ -1,9 +1,11 @@
-using Feather, Compat.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames
+using Feather, Compat.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames, Arrow
 using Compat.Random, Compat.Dates, Compat.GC
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     const GC = Compat.GC
 end
+
+const ≅ = isequal
 
 testdir = joinpath(dirname(@__FILE__), "data")
 # testdir = joinpath(Pkg.dir("Feather"), "test/data")
@@ -49,6 +51,10 @@ GC.gc(); GC.gc()
 for t in temps
     rm(t)
 end
+
+include("arrowtests.jl")
+
+GC.gc(); GC.gc()
 
 # issue #34
 data = DataFrame(A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))

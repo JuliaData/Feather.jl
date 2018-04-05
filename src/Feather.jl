@@ -1,7 +1,7 @@
 __precompile__(true)
 module Feather
 
-using Arrow, Compat
+using Arrow, Compat, Compat.Mmap
 using FlatBuffers, CategoricalArrays, DataStreams, DataFrames
 
 using Compat.Sys: iswindows
@@ -13,9 +13,6 @@ if Base.VERSION < v"0.7.0-DEV.2575"
     using Compat: @warn
 else
     import Dates
-end
-if Base.VERSION ≥ v"0.7.0-DEV.2009"
-    using Mmap
 end
 
 export Data

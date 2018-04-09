@@ -29,7 +29,6 @@ mutable struct PrimitiveArray
     total_bytes::Int64
 end
 
-# TODO why are these done this way rather with an abstract type???
 mutable struct CategoryMetadata
     levels::PrimitiveArray
     ordered::Bool
@@ -97,7 +96,7 @@ const JULIA_TYPE_DICT = Dict{Metadata.DType,DataType}(
     Metadata.TIME      => Int64
 )
 
-const MDATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
+const METADATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
     Bool    => Metadata.BOOL,
     Int8    => Metadata.INT8,
     Int16   => Metadata.INT16,
@@ -125,7 +124,7 @@ const JULIA_TIME_DICT = Dict{Metadata.TimeUnit,DataType}(
     Metadata.MICROSECOND => Dates.Microsecond,
     Metadata.NANOSECOND => Dates.Nanosecond
 )
-const MDATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
+const METADATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
 
 
 isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
@@ -149,7 +148,7 @@ function juliatype(col::Metadata.Column)
     col.values.null_count == 0 ? T : Union{T,Missing}
 end
 
-feathertype(::Type{T}) where T = MDATA_TYPE_DICT[T]
+feathertype(::Type{T}) where T = METADATA_TYPE_DICT[T]
 feathertype(::Type{Union{T,Missing}}) where T = feathertype(T)
 feathertype(::Type{<:Arrow.Datestamp}) = Metadata.INT32
 feathertype(::Type{<:Arrow.Timestamp}) = Metadata.INT64
@@ -160,12 +159,12 @@ getmetadata(io::IO, ::Type{T}, A::ArrowVector) where T = nothing
 getmetadata(io::IO, ::Type{Union{T,Missing}}, A::ArrowVector) where T = getmetadata(io, T, A)
 getmetadata(io::IO, ::Type{Arrow.Datestamp}, A::ArrowVector) = Metadata.DateMetadata()
 function getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}, A::ArrowVector) where T
-    Metadata.TimestampMetadata(MDATA_TIME_DICT[T], "")
+    Metadata.TimestampMetadata(METADATA_TIME_DICT[T], "")
 end
 function getmetadata(io::IO, ::Type{Arrow.TimeOfDay{P,T}}, A::ArrowVector) where {P,T}
-    Metadata.TimeMetadata(MDATA_TIME_DICT[P])
+    Metadata.TimeMetadata(METADATA_TIME_DICT[P])
 end
-# TODO Arrow standard says nothing about specifying whether DictEncoding is ordered!
+# WARNING Arrow standard says nothing about specifying whether DictEncoding is ordered!
 function getmetadata(io::IO, ::Type{T}, A::DictEncoding) where T
     vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
     Metadata.CategoryMetadata(vals, true)

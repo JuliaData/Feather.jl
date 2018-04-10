@@ -2,13 +2,14 @@ module Metadata
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     const Dates = Base.Dates
+    using Compat
 else
     import Dates
 end
 
 using FlatBuffers
 
-@enum(Type_, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
+@enum(DType, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
   UINT8 = 5, UINT16 = 6, UINT32 = 7, UINT64 = 8,
   FLOAT = 9, DOUBLE = 10,  UTF8 = 11,  BINARY = 12,
   CATEGORY = 13, TIMESTAMP = 14, DATE = 15, TIME = 16)
@@ -20,7 +21,7 @@ using FlatBuffers
 # FlatBuffers.enumsizeof(::Type{TimeUnit}) = UInt8
 
 mutable struct PrimitiveArray
-    type_::Type_
+    dtype::DType
     encoding::Encoding
     offset::Int64
     length::Int64
@@ -47,7 +48,7 @@ mutable struct TimeMetadata
     unit::TimeUnit
 end
 
-@UNION TypeMetadata (Void,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata)
+@UNION TypeMetadata (Nothing,CategoryMetadata,TimestampMetadata,DateMetadata,TimeMetadata)
 
 mutable struct Column
     name::String
@@ -57,8 +58,10 @@ mutable struct Column
     user_metadata::String
 end
 
-function Column(name::String, values::PrimitiveArray, metadata::TypeMetadata=nothing, user_metadata::String="")
-    return Column(name, values, FlatBuffers.typeorder(TypeMetadata, typeof(metadata)), metadata, user_metadata)
+function Column(name::String, values::PrimitiveArray, metadata::TypeMetadata=nothing,
+                user_metadata::String="")
+    Column(name, values, FlatBuffers.typeorder(TypeMetadata, typeof(metadata)),
+           metadata, user_metadata)
 end
 
 mutable struct CTable
@@ -73,8 +76,8 @@ end # module
 
 # wesm/feather/cpp/src/metadata_generated.h
 # wesm/feather/cpp/src/types.h
-const Type_2julia = Dict{Metadata.Type_,DataType}(
-    Metadata.BOOL      => Arrow.Bool,
+const JULIA_TYPE_DICT = Dict{Metadata.DType,DataType}(
+    Metadata.BOOL      => Bool,
     Metadata.INT8      => Int8,
     Metadata.INT16     => Int16,
     Metadata.INT32     => Int32,
@@ -85,7 +88,7 @@ const Type_2julia = Dict{Metadata.Type_,DataType}(
     Metadata.UINT64    => UInt64,
     Metadata.FLOAT     => Float32,
     Metadata.DOUBLE    => Float64,
-    Metadata.UTF8      => WeakRefString{UInt8},
+    Metadata.UTF8      => String,  # can also be WeakRefString{UInt8}
     Metadata.BINARY    => Vector{UInt8},
     Metadata.CATEGORY  => Int64,
     Metadata.TIMESTAMP => Int64,
@@ -93,7 +96,7 @@ const Type_2julia = Dict{Metadata.Type_,DataType}(
     Metadata.TIME      => Int64
 )
 
-const julia2Type_ = Dict{DataType,Metadata.Type_}(
+const METADATA_TYPE_DICT = Dict{DataType,Metadata.DType}(
     Bool    => Metadata.BOOL,
     Int8    => Metadata.INT8,
     Int16   => Metadata.INT16,
@@ -106,18 +109,63 @@ const julia2Type_ = Dict{DataType,Metadata.Type_}(
     Float32 => Metadata.FLOAT,
     Float64 => Metadata.DOUBLE,
     String  => Metadata.UTF8,
-    Vector{UInt8}   => Metadata.BINARY,
-    Dates.DateTime   => Metadata.INT64,
-    Dates.Date   => Metadata.INT32,
-    WeakRefString{UInt8} => Metadata.UTF8
+    Vector{UInt8} => Metadata.BINARY,
+    Dates.Time => Metadata.INT64,
+    Dates.DateTime => Metadata.INT64,
+    Dates.Date => Metadata.INT32,
+    # WeakRefString{UInt8} => Metadata.UTF8  # not currently being used
 )
 
 const NON_PRIMITIVE_TYPES = Set([Metadata.UTF8, Metadata.BINARY])
 
-const TimeUnit2julia = Dict{Metadata.TimeUnit,DataType}(
-    Metadata.SECOND => Arrow.Second,
-    Metadata.MILLISECOND => Arrow.Millisecond,
-    Metadata.MICROSECOND => Arrow.Microsecond,
-    Metadata.NANOSECOND => Arrow.Nanosecond
+const JULIA_TIME_DICT = Dict{Metadata.TimeUnit,DataType}(
+    Metadata.SECOND => Dates.Second,
+    Metadata.MILLISECOND => Dates.Millisecond,
+    Metadata.MICROSECOND => Dates.Microsecond,
+    Metadata.NANOSECOND => Dates.Nanosecond
 )
-const julia2TimeUnit = Dict{DataType,Metadata.TimeUnit}([(v, k) for (k,v) in TimeUnit2julia])
+const METADATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
+
+
+isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
+
+
+juliatype(meta::Nothing, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
+juliatype(values_type::Metadata.DType) = juliatype(nothing, values_type)
+function juliatype(meta::Metadata.CategoryMetadata, values_type::Metadata.DType)
+    JULIA_TYPE_DICT[meta.levels.dtype]
+end
+function juliatype(meta::Metadata.TimestampMetadata, values_type::Metadata.DType)
+    Timestamp{JULIA_TIME_DICT[meta.unit]}
+end
+function juliatype(meta::Metadata.TimeMetadata, values_type::Metadata.DType)
+    TimeOfDay{JULIA_TIME_DICT[meta.unit],JULIA_TYPE_DICT[values_type]}
+end
+juliatype(meta::Metadata.DateMetadata, values_type::Metadata.DType) = Datestamp
+
+function juliatype(col::Metadata.Column)
+    T = juliatype(col.metadata, col.values.dtype)
+    col.values.null_count == 0 ? T : Union{T,Missing}
+end
+
+feathertype(::Type{T}) where T = METADATA_TYPE_DICT[T]
+feathertype(::Type{Union{T,Missing}}) where T = feathertype(T)
+feathertype(::Type{<:Arrow.Datestamp}) = Metadata.INT32
+feathertype(::Type{<:Arrow.Timestamp}) = Metadata.INT64
+feathertype(::Type{<:Arrow.TimeOfDay{P,Int32}}) where P = Metadata.INT32
+feathertype(::Type{<:Arrow.TimeOfDay{P,Int64}}) where P = Metadata.INT64
+
+getmetadata(io::IO, ::Type{T}, A::ArrowVector) where T = nothing
+getmetadata(io::IO, ::Type{Union{T,Missing}}, A::ArrowVector) where T = getmetadata(io, T, A)
+getmetadata(io::IO, ::Type{Arrow.Datestamp}, A::ArrowVector) = Metadata.DateMetadata()
+function getmetadata(io::IO, ::Type{Arrow.Timestamp{T}}, A::ArrowVector) where T
+    Metadata.TimestampMetadata(METADATA_TIME_DICT[T], "")
+end
+function getmetadata(io::IO, ::Type{Arrow.TimeOfDay{P,T}}, A::ArrowVector) where {P,T}
+    Metadata.TimeMetadata(METADATA_TIME_DICT[P])
+end
+# WARNING Arrow standard says nothing about specifying whether DictEncoding is ordered!
+function getmetadata(io::IO, ::Type{T}, A::DictEncoding) where T
+    vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
+    Metadata.CategoryMetadata(vals, true)
+end

@@ -1,7 +1,9 @@
-using Feather, Compat.Test, Missings, WeakRefStrings, CategoricalArrays, DataFrames, Arrow
+using Feather, Compat.Test, CategoricalArrays
+using DataFrames, Arrow, DataStreams
 using Compat.Random, Compat.Dates, Compat.GC
 
 if Base.VERSION < v"0.7.0-DEV.2575"
+    using Missings
     const GC = Compat.GC
 end
 

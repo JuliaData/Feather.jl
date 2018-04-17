@@ -35,8 +35,8 @@ colname(s::Source, col::Integer) = Symbol(s.schema.header[col])
 colname(s::Source, col::String) = Symbol(col)
 colname(s::Source, col::Symbol) = col
 
-size(s::Source) = size(s.schema)
-size(s::Source, i::Integer) = size(s.schema, i)
+Base.size(s::Source) = size(s.schema)
+Base.size(s::Source, i::Integer) = size(s.schema, i)
 
 datapointer(s::Source) = pointer(s.data)
 
@@ -44,7 +44,7 @@ checkcolbounds(s::Source, col::Integer) = (1 ≤ col ≤ size(s, 2)) || throw(Bo
 
 
 # DataFrame constructor, using Arrow objects
-DataFrame(s::Source) = DataFrame((colname(s,i)=>s.columns[i] for i ∈ 1:size(s,2))...)
+DataFrames.DataFrame(s::Source) = DataFrame((colname(s,i)=>s.columns[i] for i ∈ 1:size(s,2))...)
 
 
 """
@@ -123,11 +123,11 @@ Data.streamfrom(s::Source, ::Type{Data.Column}, ::Type{T}, col::Integer) where T
 #=====================================================================================================
     new column construction stuff
 =====================================================================================================#
-length(p::Metadata.PrimitiveArray) = p.length
+Base.length(p::Metadata.PrimitiveArray) = p.length
 
 startloc(p::Metadata.PrimitiveArray) = p.offset+1
 
-nullcount(p::Metadata.PrimitiveArray) = p.null_count
+Arrow.nullcount(p::Metadata.PrimitiveArray) = p.null_count
 
 function bitmasklength(p::Metadata.PrimitiveArray)
     nullcount(p) == 0 ? 0 : padding(bytesforbits(length(p)))

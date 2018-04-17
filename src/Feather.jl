@@ -15,12 +15,6 @@ else
     import Dates
 end
 
-export Data
-
-import Base: length, size, read, write
-import DataFrames: DataFrame
-import Arrow.nullcount
-
 
 const FEATHER_VERSION = 2
 # wesm/feather/cpp/src/common.h

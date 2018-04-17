@@ -15,13 +15,13 @@ end
 
 function loadfile(filename::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
     isfile(filename) || throw(ArgumentError("'$file' is not a valid file."))
-    data = SHOULD_USE_MMAP ? Mmap.mmap(filename) : read(filename)
+    data = SHOULD_USE_MMAP ? Mmap.mmap(filename) : Base.read(filename)
     validatefile(filename, data)
     data
 end
 
 function metalength(data::AbstractVector{UInt8})
-    read(IOBuffer(data[(length(data)-7):(length(data)-4)]), Int32)
+    Base.read(IOBuffer(data[(length(data)-7):(length(data)-4)]), Int32)
 end
 
 function metaposition(data::AbstractVector{UInt8}, metalen::Integer=metalength(data))
@@ -29,7 +29,7 @@ function metaposition(data::AbstractVector{UInt8}, metalen::Integer=metalength(d
 end
 
 function rootposition(data::AbstractVector{UInt8}, mpos::Integer=metaposition(data))
-    read(IOBuffer(data[mpos:(mpos+4)]), Int32)
+    Base.read(IOBuffer(data[mpos:(mpos+4)]), Int32)
 end
 
 function getctable(data::AbstractVector{UInt8})

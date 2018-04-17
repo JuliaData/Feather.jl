@@ -35,8 +35,8 @@ end
 
 Data.streamtypes(::Type{Sink}) = [Data.Column]
 
-size(sink::Sink) = size(sink.schema)
-size(sink::Sink, i::Integer) = size(sink.schema, i)
+Base.size(sink::Sink) = size(sink.schema)
+Base.size(sink::Sink, i::Integer) = size(sink.schema, i)
 
 
 """
@@ -112,8 +112,8 @@ function Data.close!(sink::Sink)
     ctable = Metadata.CTable(sink.description, size(sink,1), cols, FEATHER_VERSION, sink.metadata)
     sink.ctable = ctable
     len = writemetadata(sink)
-    write(sink.io, Int32(len))  # these two writes combined are properly aligned
-    write(sink.io, FEATHER_MAGIC_BYTES)
+    Base.write(sink.io, Int32(len))  # these two writes combined are properly aligned
+    Base.write(sink.io, FEATHER_MAGIC_BYTES)
     close(sink.io)
     sink
 end

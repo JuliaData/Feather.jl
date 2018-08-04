@@ -1,4 +1,3 @@
-__precompile__(true)
 module Feather
 
 using Arrow, Compat, Compat.Mmap

@@ -1,6 +1,6 @@
 using Feather, Compat.Test, CategoricalArrays
 using DataFrames, Arrow, DataStreams
-using Compat.Random, Compat.Dates, Compat.GC
+using Compat, Compat.Random, Compat.Dates, Compat.GC
 
 if Base.VERSION < v"0.7.0-DEV.2575"
     using Missings
@@ -24,7 +24,7 @@ temps = []
     sink = Feather.write(temp, df)
     df2 = Feather.read(temp)
 
-    for (c1,c2) in zip(df.columns, df2.columns)
+    for (c1,c2) ∈ zip(getfield(df, :columns), getfield(df, :columns))
         for i = 1:length(c1)
             @test isequal(c1[i], c2[i])
         end

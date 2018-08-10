@@ -18,6 +18,6 @@ notifications:
   email: false
 
 after_success:
-  - julia -e 'import Pkg, Feather; cd(dirname(pathof(Feather),"..")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+  - julia -e 'import Pkg, Feather; cd(joinpath(dirname(pathof(Feather)),"..")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
   - julia -e 'import Pkg; Pkg.add("Documenter")'
-  - julia -e 'import Feather; cd(dirname(pathof(Feather),"..")); include(joinpath("docs", "make.jl"))'
+  - julia -e 'import Feather; cd(joinpath(dirname(pathof(Feather)),"..")); include(joinpath("docs", "make.jl"))'

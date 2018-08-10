@@ -3,4 +3,6 @@
 *.jl.mem
 /deps/builds
 /deps/usr
+docs/build
+docs/site
 CMakeLists.txt.user

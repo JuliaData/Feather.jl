@@ -8,10 +8,8 @@ makedocs(
 )
 
 deploydocs(
+    deps = Deps.pip("mkdocs", "python-markdown-math")
     repo = "github.com/JuliaData/Feather.jl.git",
-    target = "build",
-    deps = nothing,
-    make = nothing,
-    julia = "nightly",
+    julia = "1.0",
     osname = "linux"
 )

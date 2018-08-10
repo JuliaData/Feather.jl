@@ -10,7 +10,6 @@ end
 const ≅ = isequal
 
 testdir = joinpath(dirname(@__FILE__), "data")
-# testdir = joinpath(Pkg.dir("Feather"), "test/data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 
 temps = []

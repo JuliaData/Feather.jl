@@ -8,7 +8,7 @@ makedocs(
 )
 
 deploydocs(
-    deps = Deps.pip("mkdocs", "python-markdown-math")
+    deps = Deps.pip("mkdocs", "python-markdown-math"),
     repo = "github.com/JuliaData/Feather.jl.git",
     julia = "1.0",
     osname = "linux"

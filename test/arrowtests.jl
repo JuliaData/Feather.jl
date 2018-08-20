@@ -95,4 +95,8 @@ for j ∈ 1:N_IDX_TESTS
     @test df[i, :catstringsmissing] ≅ convstring.(ndf[i, :catstringsmissing])
 end
 end
+
+ndf = nothing;
+GC.gc()
+
 rm(arrow_tempname)

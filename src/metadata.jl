@@ -1,13 +1,6 @@
 module Metadata
 
-if Base.VERSION < v"0.7.0-DEV.2575"
-    const Dates = Base.Dates
-    using Compat
-else
-    import Dates
-end
-
-using FlatBuffers
+using Dates, FlatBuffers
 
 @enum(DType, BOOL = 0, INT8 = 1, INT16 = 2, INT32 = 3, INT64 = 4,
   UINT8 = 5, UINT16 = 6, UINT32 = 7, UINT64 = 8,
@@ -126,9 +119,7 @@ const JULIA_TIME_DICT = Dict{Metadata.TimeUnit,DataType}(
 )
 const METADATA_TIME_DICT = Dict{DataType,Metadata.TimeUnit}(v=>k for (k,v) in JULIA_TIME_DICT)
 
-
 isprimitivetype(t::Metadata.DType) = t ∉ NON_PRIMITIVE_TYPES
-
 
 juliatype(meta::Nothing, values_type::Metadata.DType) = JULIA_TYPE_DICT[values_type]
 juliatype(values_type::Metadata.DType) = juliatype(nothing, values_type)

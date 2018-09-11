@@ -1,20 +1,7 @@
-VERSION < v"0.7.0-beta2.199" && __precompile__()
 module Feather
 
-using Arrow, Compat, Compat.Mmap
-using FlatBuffers, CategoricalArrays, DataStreams, DataFrames
-
-using Compat.Sys: iswindows
-
-
-if Base.VERSION < v"0.7.0-DEV.2575"
-    const Dates = Base.Dates
-    using Missings
-    using Compat: @warn
-else
-    import Dates
-end
-
+using Arrow, Mmap, Dates
+using FlatBuffers, CategoricalArrays, DataFrames, Tables
 
 const FEATHER_VERSION = 2
 # wesm/feather/cpp/src/common.h

@@ -1,51 +1,59 @@
 
-mutable struct Source{S} <: Data.Source
+mutable struct Source{NT}
     path::String
-    schema::Data.Schema
+    size::Tuple{Int64, Int64}
     ctable::Metadata.CTable
     data::Vector{UInt8}
     columns::Vector{ArrowVector}
 end
 
-
-function Source(file::AbstractString, sch::Data.Schema{R,T}, ctable::Metadata.CTable,
-                data::Vector{UInt8}) where {R,T}
-    s = Source{T}(file, sch, ctable, data, Vector{ArrowVector}(undef, 0))
+function Source(file::AbstractString, ::Type{NT}, ctable::Metadata.CTable,
+                data::Vector{UInt8}) where {NT <: NamedTuple}
+    s = Source{NT}(file, (ctable.num_rows, length(ctable.columns)), ctable, data, Vector{ArrowVector}(undef, 0))
     s.columns = constructall(s)
     s
 end
 function Source(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
     data = loadfile(file, use_mmap=use_mmap)
     ctable = getctable(data)
-    sch = Data.schema(ctable)
+    sch = schema(ctable)
     Source(file, sch, ctable, data)
 end
 
-Data.schema(s::Source) = s.schema
-Data.header(s::Source) = Data.header(s.schema)
-Data.types(s::Source{S}) where S = Tuple(S.parameters)
+function schema(ctable::Metadata.CTable)
+    ncols = length(ctable.columns)
+    header = Vector{Symbol}(undef, ncols)
+    types = Vector{Type}(undef, ncols)
+    for (i, col) ∈ enumerate(ctable.columns)
+        header[i] = Symbol(col.name)
+        types[i] = juliatype(col)
+    end
+    return NamedTuple{Tuple(header), Tuple{types...}}
+end
+
+Tables.istable(::Type{<:Source}) = true
+Tables.columnaccess(::Type{<:Source}) = true
+Tables.schema(s::Source{NT}) where {NT} = Tables.Schema(NT)
+
+Tables.columns(s::Source{NamedTuple{names, T}}) where {names, T} =
+    NamedTuple{names}(Tuple(s.columns[i] for i = 1:length(names)))
 
 getcolumn(s::Source, col::Integer) = s.ctable.columns[col]
 
 colnumber(s::Source, col::Integer) = col
-colnumber(s::Source, col::String) = s.schema[col]
-colnumber(s::Source, col::Symbol) = colnumber(s, string(col))
+colnumber(s::Source{NamedTuple{names, T}}, col::String) where {names, T} = Tables.columnindex(names, Symbol(col))
+colnumber(s::Source{NamedTuple{names, T}}, col::Symbol) where {names, T} = Tables.columnindex(names, col)
 
-colname(s::Source, col::Integer) = Symbol(s.schema.header[col])
+colname(s::Source{NamedTuple{names, T}}, col::Symbol) where {names, T} = names[col]
 colname(s::Source, col::String) = Symbol(col)
 colname(s::Source, col::Symbol) = col
 
-Base.size(s::Source) = size(s.schema)
-Base.size(s::Source, i::Integer) = size(s.schema, i)
+Base.size(s::Source) = s.size
+Base.size(s::Source, i::Integer) = ifelse(i == 1, s.size[1], s.size[2])
 
 datapointer(s::Source) = pointer(s.data)
 
 checkcolbounds(s::Source, col::Integer) = (1 ≤ col ≤ size(s, 2)) || throw(BoundsError(s, col))
-
-
-# DataFrame constructor, using Arrow objects
-DataFrames.DataFrame(s::Source) = DataFrame((colname(s,i)=>s.columns[i] for i ∈ 1:size(s,2))...)
-
 
 """
     Feather.read(file::AbstractString)
@@ -98,26 +106,6 @@ materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
 materialize(file::AbstractString) = materialize(Source(file))
 
 materialize(df::DataFrame) = DataFrame((n=>materialize(df[n]) for n ∈ names(df))...)
-#=====================================================================================================
-    DataStreams interface
-=====================================================================================================#
-Data.streamtype(::Type{Source}, ::Type{Data.Field}) = true
-Data.streamtype(::Type{Source}, ::Type{Data.Column}) = true
-Data.accesspattern(::Source) = Data.RandomAccess
-
-Data.reference(s::Source) = s.data
-function Data.isdone(s::Source, row::Integer, col::Integer, rows::Integer, cols::Integer)
-    col > cols || row > rows
-end
-function Data.isdone(s::Source, row::Integer, col::Integer)
-    rows, cols = size(s)
-    Data.isdone(s, row, col, rows, cols)
-end
-
-function Data.streamfrom(s::Source, ::Type{Data.Field}, ::Type{T}, row::Integer, col::Integer) where T
-    s.columns[col][row]
-end
-Data.streamfrom(s::Source, ::Type{Data.Column}, ::Type{T}, col::Integer) where T = s.columns[col][:]
 
 
 #=====================================================================================================

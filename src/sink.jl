@@ -1,67 +1,43 @@
-
-# TODO currently there is no appending or anything like that
-
-mutable struct Sink <: Data.Sink
-    filename::String
-    schema::Data.Schema
-    ctable::Metadata.CTable
-    io::IO
-    description::String
-    metadata::String
-    columns::Vector{ArrowVector}
-end
-
-function Sink(filename::AbstractString, sch::Data.Schema=Data.Schema(),
-              cols::AbstractVector{<:ArrowVector}=Vector{ArrowVector}(undef, size(sch,2));
-              description::AbstractString="", metadata::AbstractString="")
-    ctable = Metadata.CTable(description, 0, Metadata.Column[], FEATHER_VERSION, metadata)
-    io = open(filename, "w+")
-    Sink(filename, sch, ctable, io, description, metadata, cols)
-end
-function Sink(filename::AbstractString, df::DataFrame; description::AbstractString="",
-              metadata::AbstractString="")
-    Sink(filename, Data.schema(df), description=description, metadata=metadata)
-end
-
-# required by DataStreams
-function Sink(sch::Data.Schema, ::Type{Data.Column}, append::Bool, file::AbstractString;
-              reference::Vector{UInt8}=UInt8[], kwargs...)
-    Sink(file, sch)
-end
-function Sink(sink::Sink, sch::Data.Schema, ::Type{Data.Column}, append::Bool;
-              reference::Vector{UInt8}=UInt8[])
-    Sink(sink.filename, sch, sink.columns)
-end
-
-Data.streamtypes(::Type{Sink}) = [Data.Column]
-
-Base.size(sink::Sink) = size(sink.schema)
-Base.size(sink::Sink, i::Integer) = size(sink.schema, i)
-
-
 """
-    write(filename::AbstractString, df::DataFrame)
+    Feather.write(tbl, file::String; description="", metadata="")
 
-Write the dataframe `df` to the feather formatted file `filename`.
+Write any Tables.jl implementation as a feather-formatted file. Optionally, a `description`
+and `metadata` can be provided as Strings.
 """
-function write(filename::AbstractString, df::AbstractDataFrame)
-    sink = Feather.Sink(filename, df)
-    Data.stream!(df, sink)
-    Data.close!(sink)
+function write end
+
+function write(file::String, df::DataFrame; kwargs...)
+    Base.depwarn("`Feather.write(file, df)` is deprecated in favor of `Feather.write(tbl, file`) where tbl can be any Tables.jl implementation", nothing)
+    return write(df, file)
 end
 
-
-function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{T}, row, col) where T
-    sink.columns[col] = arrowformat(val)
+write(filename::AbstractString; kwargs...) = x->write(x, filename; kwargs...)
+function write(tbl, filename::AbstractString; description::String="", metadata::String="")
+    open(filename, "w+") do io
+        writepadded(io, FEATHER_MAGIC_BYTES)
+        metacols = Metadata.Column[]
+        columns = Tables.columns(tbl)
+        names = propertynames(columns)
+        len = 0
+        for nm in names
+            column = getarrow(getproperty(columns, nm))
+            len = length(column)
+            vals = writecontents(Metadata.PrimitiveArray, io, column)
+            push!(metacols, Metadata.Column(String(nm), vals, getmetadata(io, eltype(column), column), ""))
+        end
+        ctable = Metadata.CTable(description, len, metacols, FEATHER_VERSION, metadata)
+        metalen = writemetadata(io, ctable)
+        Base.write(io, metalen)
+        Base.write(io, FEATHER_MAGIC_BYTES)
+    end
+    return filename
 end
 
-# NOTE: the below is very inefficient, but we are forced to do it by the Feather format
-function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{Union{T,Missing}},
-                        row, col) where T
-    hasmissing = Compat.findfirst(ismissing, val)
-    sink.columns[col] = arrowformat(hasmissing == nothing ? convert(AbstractVector{T}, val) : val)
+getarrow(col::AbstractVector{T}) where {T} = arrowformat(col)
+function getarrow(col::AbstractVector{Union{T, Missing}}) where {T}
+    hasmissing = any(ismissing, col)
+    return arrowformat(hasmissing ? col : convert(AbstractVector{T}, col))
 end
-
 
 function Metadata.PrimitiveArray(A::ArrowVector{J}, off::Integer, nbytes::Integer) where J
     Metadata.PrimitiveArray(feathertype(J), Metadata.PLAIN, off, length(A), nullcount(A), nbytes)
@@ -70,7 +46,6 @@ function Metadata.PrimitiveArray(A::DictEncoding, off::Integer, nbytes::Integer)
     Metadata.PrimitiveArray(feathertype(eltype(references(A))), Metadata.PLAIN, off, length(A),
                             nullcount(A), nbytes)
 end
-
 
 writecontents(io::IO, A::Primitive) = writepadded(io, A)
 writecontents(io::IO, A::NullablePrimitive) = writepadded(io, A, bitmask, values)
@@ -86,35 +61,10 @@ function writecontents(::Type{Metadata.PrimitiveArray}, io::IO, A::ArrowVector)
     Metadata.PrimitiveArray(A, a, b-a)
 end
 
-
-function writecolumn(io::IO, name::AbstractString, A::ArrowVector{J}) where J
-    vals = writecontents(Metadata.PrimitiveArray, io, A)
-    Metadata.Column(String(name), vals, getmetadata(io, J, A), "")
-end
-function writecolumn(sink::Sink, col::String)
-    writecolumn(sink.io, col, sink.columns[sink.schema[col]])
-end
-writecolumns(sink::Sink) = Metadata.Column[writecolumn(sink, n) for n ∈ Data.header(sink.schema)]
-
-
 function writemetadata(io::IO, ctable::Metadata.CTable)
     meta = FlatBuffers.build!(ctable)
     rng = (meta.head+1):length(meta.bytes)
     writepadded(io, view(meta.bytes, rng))
     Int32(length(rng))
-end
-writemetadata(sink::Sink) = writemetadata(sink.io, sink.ctable)
-
-
-function Data.close!(sink::Sink)
-    writepadded(sink.io, FEATHER_MAGIC_BYTES)
-    cols = writecolumns(sink)
-    ctable = Metadata.CTable(sink.description, size(sink,1), cols, FEATHER_VERSION, sink.metadata)
-    sink.ctable = ctable
-    len = writemetadata(sink)
-    Base.write(sink.io, Int32(len))  # these two writes combined are properly aligned
-    Base.write(sink.io, FEATHER_MAGIC_BYTES)
-    close(sink.io)
-    sink
 end
 

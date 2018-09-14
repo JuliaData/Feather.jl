@@ -52,7 +52,16 @@ function write(filename::AbstractString, df::AbstractDataFrame; overwrite::Bool=
         if !overwrite
             throw(ArgumentError("File $filename already exists. Pass `overwrite=true` to overwrite."))
         else
-            rm(filename)
+            if Sys.iswindows()
+                try
+                    rm(filename)
+                catch e
+                    @error("Unable to delete file, is it a Feather file already being read from?")
+                    throw(e)
+                end
+            else
+                rm(filename)
+            end
         end
     end
     sink = Feather.Sink(filename, df)

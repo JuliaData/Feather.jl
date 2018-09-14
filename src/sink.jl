@@ -40,11 +40,21 @@ Base.size(sink::Sink, i::Integer) = size(sink.schema, i)
 
 
 """
-    write(filename::AbstractString, df::DataFrame)
+    write(filename::AbstractString, df::DataFrame; overwrite::Bool=false)
 
 Write the dataframe `df` to the feather formatted file `filename`.
+
+If the file `filename` already exists, an error will be thrown, unless `overwrite=true` in
+which case the file will be deleted before writing.
 """
-function write(filename::AbstractString, df::AbstractDataFrame)
+function write(filename::AbstractString, df::AbstractDataFrame; overwrite::Bool=false)
+    if isfile(filename)
+        if !overwrite
+            throw(ArgumentError("File $filename already exists. Pass `overwrite=true` to overwrite."))
+        else
+            rm(filename)
+        end
+    end
     sink = Feather.Sink(filename, df)
     Data.stream!(df, sink)
     Data.close!(sink)

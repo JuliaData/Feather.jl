@@ -56,7 +56,8 @@ function write(filename::AbstractString, df::AbstractDataFrame; overwrite::Bool=
                 try
                     rm(filename)
                 catch e
-                    @error("Unable to delete file, is it a Feather file already being read from?")
+                    @error(string("Unable to delete file $filename. It's possible that it's ",
+                                  "already open and being used by this or another process."))
                     throw(e)
                 end
             else

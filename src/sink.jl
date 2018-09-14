@@ -58,7 +58,7 @@ function write(filename::AbstractString, df::AbstractDataFrame; overwrite::Bool=
                 catch e
                     @error(string("Unable to delete file $filename. It's possible that it's ",
                                   "already open and being used by this or another process."))
-                    throw(e)
+                    rethrow(e)
                 end
             else
                 rm(filename)

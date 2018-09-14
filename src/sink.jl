@@ -6,13 +6,8 @@ and `metadata` can be provided as Strings.
 """
 function write end
 
-function write(file::String, df::DataFrame; kwargs...)
-    Base.depwarn("`Feather.write(file, df)` is deprecated in favor of `Feather.write(tbl, file`) where tbl can be any Tables.jl implementation", nothing)
-    return write(df, file)
-end
-
-write(filename::AbstractString; kwargs...) = x->write(x, filename; kwargs...)
-function write(tbl, filename::AbstractString; description::String="", metadata::String="")
+write(filename::AbstractString; kwargs...) = x->write(filename, x; kwargs...)
+function write(filename::AbstractString, tbl; description::String="", metadata::String="")
     open(filename, "w+") do io
         writepadded(io, FEATHER_MAGIC_BYTES)
         metacols = Metadata.Column[]

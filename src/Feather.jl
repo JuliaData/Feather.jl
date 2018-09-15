@@ -10,7 +10,7 @@ using Compat.Sys: iswindows
 if Base.VERSION < v"0.7.0-DEV.2575"
     const Dates = Base.Dates
     using Missings
-    using Compat: @warn
+    using Compat: @warn, @error
 else
     import Dates
 end

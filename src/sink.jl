@@ -78,7 +78,7 @@ end
 # NOTE: the below is very inefficient, but we are forced to do it by the Feather format
 function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{Union{T,Missing}},
                         row, col) where T
-    hasmissing = Compat.findfirst(ismissing, val)
+    hasmissing = findfirst(ismissing, val)
     sink.columns[col] = arrowformat(hasmissing == nothing ? convert(AbstractVector{T}, val) : val)
 end
 

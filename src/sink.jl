@@ -40,11 +40,31 @@ Base.size(sink::Sink, i::Integer) = size(sink.schema, i)
 
 
 """
-    write(filename::AbstractString, df::DataFrame)
+    write(filename::AbstractString, df::DataFrame; overwrite::Bool=false)
 
 Write the dataframe `df` to the feather formatted file `filename`.
+
+If the file `filename` already exists, an error will be thrown, unless `overwrite=true` in
+which case the file will be deleted before writing.
 """
-function write(filename::AbstractString, df::AbstractDataFrame)
+function write(filename::AbstractString, df::AbstractDataFrame; overwrite::Bool=false)
+    if isfile(filename)
+        if !overwrite
+            throw(ArgumentError("File $filename already exists. Pass `overwrite=true` to overwrite."))
+        else
+            if Sys.iswindows()
+                try
+                    rm(filename)
+                catch e
+                    @error(string("Unable to delete file $filename. It's possible that it's ",
+                                  "already open and being used by this or another process."))
+                    rethrow(e)
+                end
+            else
+                rm(filename)
+            end
+        end
+    end
     sink = Feather.Sink(filename, df)
     Data.stream!(df, sink)
     Data.close!(sink)
@@ -58,7 +78,7 @@ end
 # NOTE: the below is very inefficient, but we are forced to do it by the Feather format
 function Data.streamto!(sink::Sink, ::Type{Data.Column}, val::AbstractVector{Union{T,Missing}},
                         row, col) where T
-    hasmissing = Compat.findfirst(ismissing, val)
+    hasmissing = findfirst(ismissing, val)
     sink.columns[col] = arrowformat(hasmissing == nothing ? convert(AbstractVector{T}, val) : val)
 end
 

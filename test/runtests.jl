@@ -1,21 +1,16 @@
-using Feather, Compat.Test, CategoricalArrays
-using DataFrames, Arrow, DataStreams
-using Compat, Compat.Random, Compat.Dates, Compat.GC
-
-if Base.VERSION < v"0.7.0-DEV.2575"
-    using Missings
-    const GC = Compat.GC
-end
+using Feather, Test, CategoricalArrays
+using DataFrames, Arrow, Tables
+using Random, Dates
 
 const ≅ = isequal
 
-testdir = joinpath(dirname(@__FILE__), "data")
+testdir = joinpath(dirname(pathof(Feather)), "../test/data")
 files = map(x -> joinpath(testdir, x), readdir(testdir))
 
 temps = []
 
 @testset "ReadWrite" for f in files
-    println("tesing $f...")
+    println("testing $f...")
     source = Feather.Source(f)
     df = DataFrame(source)
     temp = tempname()
@@ -29,10 +24,11 @@ temps = []
         end
     end
 
-    @test source.ctable.description == sink.ctable.description
-    @test source.ctable.num_rows == sink.ctable.num_rows
-    @test source.ctable.metadata == sink.ctable.metadata
-    for (col1,col2) in zip(source.ctable.columns,sink.ctable.columns)
+    source2 = Feather.Source(sink)
+    @test source.ctable.description == source2.ctable.description
+    @test source.ctable.num_rows == source2.ctable.num_rows
+    @test source.ctable.metadata == source2.ctable.metadata
+    for (col1,col2) in zip(source.ctable.columns,source2.ctable.columns)
         @test col1.name == col2.name
         @test col1.metadata_type == col2.metadata_type
         @test typeof(col1.metadata) == typeof(col2.metadata)
@@ -62,7 +58,7 @@ data = DataFrame(A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=ran
 data[2, :A] = missing
 Feather.write("testfile.feather", data)
 dfo = Feather.read("testfile.feather")
-@test size(Data.schema(dfo)) == (100, 2)
+@test size(dfo) == (100, 2)
 GC.gc();
 rm("testfile.feather")
 

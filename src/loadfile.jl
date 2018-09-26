@@ -1,5 +1,5 @@
 
-getoutputlength(version::Int32, x::Integer) = version < FEATHER_VERSION ? x : padding(x)
+getoutputlength(version::Int32, x::Integer) = version < 2 ? x : padding(x)
 
 function validatefile(filename::AbstractString, data::AbstractVector{UInt8})
     if length(data) < MIN_FILE_LENGTH
@@ -40,16 +40,4 @@ function getctable(data::AbstractVector{UInt8})
         @warn("This feather file is old and may not be readable.")
     end
     ctable
-end
-
-
-function Data.schema(ctable::Metadata.CTable)
-    ncols = length(ctable.columns)
-    header = Vector{String}(undef, ncols)
-    types = Vector{Type}(undef, ncols)
-    for (i, col) ∈ enumerate(ctable.columns)
-        header[i] = col.name
-        types[i] = juliatype(col)
-    end
-    Data.Schema(types, header, ctable.num_rows)
 end

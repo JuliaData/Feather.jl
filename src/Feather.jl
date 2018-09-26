@@ -1,10 +1,7 @@
 module Feather
 
-using Arrow, Mmap
-using FlatBuffers, CategoricalArrays, DataStreams, DataFrames
-
-import Dates
-
+using Arrow, Mmap, Dates
+using FlatBuffers, CategoricalArrays, DataFrames, Tables
 
 const FEATHER_VERSION = 2
 # wesm/feather/cpp/src/common.h

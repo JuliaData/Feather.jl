@@ -15,7 +15,7 @@ temps = []
     df = DataFrame(source)
     temp = tempname()
     push!(temps, temp)
-    sink = Feather.write(df, temp)
+    sink = Feather.write(temp, df)
     df2 = Feather.read(temp)
 
     for (c1,c2) ∈ zip(getfield(df, :columns), getfield(df, :columns))
@@ -56,7 +56,7 @@ GC.gc(); GC.gc()
 # issue #34
 data = DataFrame(A=Union{Missing, String}[randstring(10) for i ∈ 1:100], B=rand(100))
 data[2, :A] = missing
-Feather.write(data, "testfile.feather")
+Feather.write("testfile.feather", data)
 dfo = Feather.read("testfile.feather")
 @test size(dfo) == (100, 2)
 GC.gc();
@@ -105,7 +105,7 @@ try
     df_ = Feather.read("test.feather"; use_mmap=false)
 
     println("Writing test2.feather from julia...")
-    Feather.write(df, "test2.feather")
+    Feather.write("test2.feather", df)
     df2 = Feather.read("test2.feather")
 
     @test df2[:Autf8][:] == ["hey","there","sailor"]

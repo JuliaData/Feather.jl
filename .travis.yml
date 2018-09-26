@@ -10,7 +10,6 @@ os:
   - linux
 
 julia:
-  - 0.6
   - 1.0
   - nightly
 

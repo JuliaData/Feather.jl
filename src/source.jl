@@ -44,6 +44,7 @@ colnumber(s::Source, col::Integer) = col
 colnumber(s::Source{NamedTuple{names, T}}, col::String) where {names, T} = Tables.columnindex(names, Symbol(col))
 colnumber(s::Source{NamedTuple{names, T}}, col::Symbol) where {names, T} = Tables.columnindex(names, col)
 
+colname(s::Source{NamedTuple{names, T}}, col::Integer) where {names, T} = names[col]
 colname(s::Source{NamedTuple{names, T}}, col::Symbol) where {names, T} = names[col]
 colname(s::Source, col::String) = Symbol(col)
 colname(s::Source, col::Symbol) = col

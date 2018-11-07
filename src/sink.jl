@@ -1,5 +1,5 @@
 """
-    Feather.write(tbl, file::String; description="", metadata="")
+    Feather.write(file::String, tbl; description="", metadata="")
 
 Write any Tables.jl implementation as a feather-formatted file. Optionally, a `description`
 and `metadata` can be provided as Strings.

@@ -14,7 +14,7 @@ function validatefile(filename::AbstractString, data::AbstractVector{UInt8})
 end
 
 function loadfile(filename::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
-    isfile(filename) || throw(ArgumentError("'$filename' is not a valid file."))
+    isfile(filename) || throw(ArgumentError("'$filename' does not exist."))
     data = SHOULD_USE_MMAP ? Mmap.mmap(filename) : Base.read(filename)
     validatefile(filename, data)
     data

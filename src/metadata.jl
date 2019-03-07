@@ -166,3 +166,8 @@ function getmetadata(io::IO, ::Type{T}, A::DictEncoding) where T
     vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
     Metadata.CategoryMetadata(vals, true)
 end
+# below method needed to fix method ambiguity
+function getmetadata(io::IO, ::Type{Union{T,Missing}}, A::DictEncoding) where {T}
+    vals = writecontents(Metadata.PrimitiveArray, io, levels(A))
+    Metadata.CategoryMetadata(vals, true)
+end

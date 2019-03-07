@@ -1,5 +1,6 @@
 """
     Feather.write(file::String, tbl; description="", metadata="")
+    Feather.write(io::IO, tbl; description="", metadata="")
 
 Write any Tables.jl implementation as a feather-formatted file. Optionally, a `description`
 and `metadata` can be provided as Strings.
@@ -7,25 +8,30 @@ and `metadata` can be provided as Strings.
 function write end
 
 write(filename::AbstractString; kwargs...) = x->write(filename, x; kwargs...)
+function write(io::IO, tbl; description::String="", metadata::String="")
+    writepadded(io, FEATHER_MAGIC_BYTES)
+    metacols = Metadata.Column[]
+    columns = Tables.columns(tbl)
+    names = propertynames(columns)
+    len = 0
+    for nm in names
+        column = getarrow(getproperty(columns, nm))
+        len = length(column)
+        vals = writecontents(Metadata.PrimitiveArray, io, column)
+        push!(metacols, Metadata.Column(String(nm), vals,
+                                        getmetadata(io, eltype(column), column), ""))
+    end
+    ctable = Metadata.CTable(description, len, metacols, FEATHER_VERSION, metadata)
+    metalen = writemetadata(io, ctable)
+    Base.write(io, metalen)
+    Base.write(io, FEATHER_MAGIC_BYTES)
+    io
+end
 function write(filename::AbstractString, tbl; description::String="", metadata::String="")
     open(filename, "w+") do io
-        writepadded(io, FEATHER_MAGIC_BYTES)
-        metacols = Metadata.Column[]
-        columns = Tables.columns(tbl)
-        names = propertynames(columns)
-        len = 0
-        for nm in names
-            column = getarrow(getproperty(columns, nm))
-            len = length(column)
-            vals = writecontents(Metadata.PrimitiveArray, io, column)
-            push!(metacols, Metadata.Column(String(nm), vals, getmetadata(io, eltype(column), column), ""))
-        end
-        ctable = Metadata.CTable(description, len, metacols, FEATHER_VERSION, metadata)
-        metalen = writemetadata(io, ctable)
-        Base.write(io, metalen)
-        Base.write(io, FEATHER_MAGIC_BYTES)
+        write(io, tbl, description=description, metadata=metadata)
     end
-    return filename
+    filename
 end
 
 getarrow(col::AbstractVector{T}) where {T} = arrowformat(col)

@@ -3,13 +3,7 @@ const SEED = 999
 const NROWS = 128
 const N_IDX_TESTS = 16
 
-arrow_tempname = tempname()
-
-if VERSION < v"0.7-"
-    srand(SEED)
-else
-    Random.seed!(SEED)
-end
+Random.seed!(SEED)
 
 randdate() = Date(rand(0:4000), rand(1:12), rand(1:27))
 randtime() = Dates.Time(rand(0:23), rand(0:59), rand(0:59))
@@ -22,6 +16,8 @@ end
 
 convstring(str::AbstractString) = String(str)
 convstring(::Missing) = missing
+
+io = IOBuffer()
 
 @testset "ArrowTests" begin
 df = DataFrame(ints=rand(Int32,NROWS),
@@ -36,9 +32,9 @@ df = DataFrame(ints=rand(Int32,NROWS),
                catstringsmissing=categorical(randstrings(missing))
               )
 
-Feather.write(arrow_tempname, df)
+Feather.write(io, df)
 
-ndf = Feather.read(arrow_tempname)
+ndf = Feather.read(io)
 
 @test typeof(ndf[:ints]) == Primitive{Int32}
 @test typeof(ndf[:floats]) == Primitive{Float64}
@@ -98,5 +94,3 @@ end
 
 ndf = nothing;
 GC.gc()
-
-rm(arrow_tempname)

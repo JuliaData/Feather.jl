@@ -42,7 +42,7 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 [travis-url]: https://travis-ci.org/JuliaData/Feather.jl
 
 [appveyor-img]: https://ci.appveyor.com/api/projects/status/nyybu2t2ofln4rn6/branch/master?svg=true
-[appveyor-url]: https://ci.appveyor.com/project/quinnj/feather-jl
+[appveyor-url]: https://ci.appveyor.com/project/quinnj/feather-jl-xxi09
 
 [codecov-img]: https://codecov.io/gh/JuliaData/Feather.jl/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaData/Feather.jl

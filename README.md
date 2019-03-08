@@ -23,7 +23,7 @@ julia> Pkg.add("Feather")
 
 ## Project Status
 
-The package is tested against Julia `0.6` and `0.7` on Linux, OS X, and Windows.
+The package is tested against Julia `1.0` and `1.1` on Linux, OS X, and Windows.
 
 ## Contributing and Questions
 

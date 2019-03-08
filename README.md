@@ -3,9 +3,9 @@
 
 *Julia library for working with feather-formatted files*
 
-| **Documentation**                                                               | **PackageEvaluator**                                            | **Build Status**                                                                                |
-|:-------------------------------------------------------------------------------:|:---------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][pkg-0.6-img]][pkg-0.6-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
+| **Documentation**                                                               | **Build Status**                                                                                |
+|:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
+| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
 
 
 ## Installation
@@ -48,10 +48,3 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 [codecov-url]: https://codecov.io/gh/JuliaData/Feather.jl
 
 [issues-url]: https://github.com/JuliaData/Feather.jl/issues
-
-[pkg-0.4-img]: http://pkg.julialang.org/badges/Feather_0.4.svg
-[pkg-0.4-url]: http://pkg.julialang.org/?pkg=Feather
-[pkg-0.5-img]: http://pkg.julialang.org/badges/Feather_0.5.svg
-[pkg-0.5-url]: http://pkg.julialang.org/?pkg=Feather
-[pkg-0.6-img]: http://pkg.julialang.org/badges/Feather_0.6.svg
-[pkg-0.6-url]: http://pkg.julialang.org/?pkg=Feather

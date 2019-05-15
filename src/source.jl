@@ -65,7 +65,7 @@ from disk until a particular field of the dataframe is accessed.
 
 To copy the entire file into memory, instead use `materialize`.
 """
-read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(file, use_mmap=use_mmap))
+read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(file, use_mmap=use_mmap), copycols=!use_mmap)
 
 
 # TODO update docs

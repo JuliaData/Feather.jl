@@ -1,6 +1,8 @@
-import feather, pandas, numpy as np, datetime, unittest
+import pandas as pd, numpy as np, datetime, unittest
 
-df2 = feather.read_dataframe("/home/test2.feather")
+print("Reading feather from Python...")
+
+df2 = pd.read_feather("test2.feather")
 
 class TestFeather(unittest.TestCase):
 

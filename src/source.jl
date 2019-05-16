@@ -10,7 +10,7 @@ function Source(::Type{NT}, ctable::Metadata.CTable,
                 data::Vector{UInt8}) where {NT <: NamedTuple}
     s = Source{NT}((ctable.num_rows, length(ctable.columns)),
                    ctable, data, Vector{ArrowVector}(undef, 0))
-    s.columns = constructall(s)
+    #s.columns = constructall(s)
     s
 end
 function Source(io::FilenameOrIO; use_mmap::Bool=SHOULD_USE_MMAP)
@@ -66,7 +66,7 @@ from disk until a particular field of the dataframe is accessed.
 To copy the entire file into memory, instead use `materialize`.
 """
 function read(io::FilenameOrIO; use_mmap::Bool=SHOULD_USE_MMAP)
-    DataFrame(Source(io, use_mmap=use_mmap))
+    DataFrame(Source(io, use_mmap=use_mmap), copycols=false)
 end
 
 

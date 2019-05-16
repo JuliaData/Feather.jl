@@ -3,10 +3,9 @@
 
 *Julia library for working with feather-formatted files*
 
-| **Documentation**                                                               | **PackageEvaluator**                                            | **Build Status**                                                                                |
-|:-------------------------------------------------------------------------------:|:---------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][pkg-0.6-img]][pkg-0.6-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
-
+| **Documentation**                                                               | **Build Status**                                                                                |
+|:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
+| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
 
 ## Installation
 
@@ -23,7 +22,7 @@ julia> Pkg.add("Feather")
 
 ## Project Status
 
-The package is tested against Julia `0.6` and `0.7` on Linux, OS X, and Windows.
+The package is tested against Julia `1.0` and `1.1` on Linux, OS X, and Windows.
 
 ## Contributing and Questions
 
@@ -42,7 +41,7 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 [travis-url]: https://travis-ci.org/JuliaData/Feather.jl
 
 [appveyor-img]: https://ci.appveyor.com/api/projects/status/nyybu2t2ofln4rn6/branch/master?svg=true
-[appveyor-url]: https://ci.appveyor.com/project/quinnj/feather-jl
+[appveyor-url]: https://ci.appveyor.com/project/quinnj/feather-jl-xxi09
 
 [codecov-img]: https://codecov.io/gh/JuliaData/Feather.jl/branch/master/graph/badge.svg
 [codecov-url]: https://codecov.io/gh/JuliaData/Feather.jl

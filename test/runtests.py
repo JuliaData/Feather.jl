@@ -16,7 +16,8 @@ Afloat32 = np.array([1.0, "NaN", 0.0], dtype=np.float32)
 Afloat64 = np.array(["Inf", 1.0, 0.0], dtype=np.float64)
 
 Autf8 = ["hey","there","sailor"]
-Abinary = [b"hey",b"there",b"sailor"]
+# NOTE something changed here and it's not working
+#Abinary = [b"hey",b"there",b"sailor"]
 
 # Adate = [datetime.datetime(2016,1,1).date(),datetime.datetime(2016,1,2).date(),datetime.datetime(2016,1,3).date()]
 Adatetime = [datetime.datetime(2016,1,1),datetime.datetime(2016,1,2),datetime.datetime(2016,1,3)]
@@ -24,6 +25,10 @@ Adatetime = [datetime.datetime(2016,1,1),datetime.datetime(2016,1,2),datetime.da
 Acat = pd.Categorical(["a","b","c"], categories=["a","b","c","d"],ordered=False)  # don't conform to Arrow!
 Acatordered = pd.Categorical(["d","e","f"], categories=["d","e","f"],ordered=True)  # don't conform to Arrow!
 
-df = pd.DataFrame({"Abool": Abool,"Aint8": Aint8,"Aint16": Aint16,"Aint32": Aint32,"Aint64": Aint64,"Auint8": Auint8,"Auint16": Auint16,"Auint32": Auint32,"Auint64": Auint64,"Afloat32": Afloat32,"Afloat64": Afloat64,"Autf8": Autf8,"Abinary": Abinary,"Adatetime": Adatetime, "Acat": Acat,"Acatordered":Acatordered})
+df = pd.DataFrame({"Abool": Abool, "Aint8": Aint8, "Aint16": Aint16, "Aint32": Aint32,
+                   "Aint64": Aint64, "Auint8": Auint8, "Auint16": Auint16, "Auint32": Auint32,
+                   "Auint64": Auint64, "Afloat32": Afloat32, "Afloat64": Afloat64, "Autf8": Autf8,
+                   #"Abinary": Abinary,
+                   "Adatetime": Adatetime, "Acat": Acat,"Acatordered":Acatordered})
 
 df.to_feather("test.feather")

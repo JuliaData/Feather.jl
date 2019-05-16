@@ -92,7 +92,7 @@ if DO_PYTHON_ROUNDTRIP
         df = Feather.read("test.feather")
     
         dts = [Dates.DateTime(2016,1,1), Dates.DateTime(2016,1,2), Dates.DateTime(2016,1,3)]
-    
+
         @test df[:Autf8][:] == ["hey","there","sailor"]
         @test df[:Abool][:] == [true, true, false]
         @test df[:Acat][:] == categorical(["a","b","c"])  # these violate Arrow standard by using Int8!!
@@ -101,11 +101,11 @@ if DO_PYTHON_ROUNDTRIP
         @test isequal(df[:Afloat32][:], [1.0, missing, 0.0])
         @test df[:Afloat64][:] == [Inf,1.0,0.0]
     
-        df_ = Feather.read(joinpath(testdir, "test.feather"); use_mmap=false)
+        df_ = Feather.read("test.feather"; use_mmap=false)
     
         @info("Writing test2.feather from Julia...")
-        Feather.write(joinpath(testdir,"test2.feather"), df)
-        df2 = Feather.read(joinpath(testdir,"test2.feather"))
+        Feather.write("test2.feather", df)
+        df2 = Feather.read("test2.feather")
     
         @test df2[:Autf8][:] == ["hey","there","sailor"]
         @test df2[:Abool][:] == [true, true, false]

@@ -1,23 +1,23 @@
 
 mutable struct Source{NT}
-    path::String
     size::Tuple{Int64, Int64}
     ctable::Metadata.CTable
     data::Vector{UInt8}
     columns::Vector{ArrowVector}
 end
 
-function Source(file::AbstractString, ::Type{NT}, ctable::Metadata.CTable,
+function Source(::Type{NT}, ctable::Metadata.CTable,
                 data::Vector{UInt8}) where {NT <: NamedTuple}
-    s = Source{NT}(file, (ctable.num_rows, length(ctable.columns)), ctable, data, Vector{ArrowVector}(undef, 0))
+    s = Source{NT}((ctable.num_rows, length(ctable.columns)),
+                   ctable, data, Vector{ArrowVector}(undef, 0))
     s.columns = constructall(s)
     s
 end
-function Source(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
-    data = loadfile(file, use_mmap=use_mmap)
+function Source(io::FilenameOrIO; use_mmap::Bool=SHOULD_USE_MMAP)
+    data = loaddata(io, use_mmap=use_mmap)
     ctable = getctable(data)
     sch = schema(ctable)
-    Source(file, sch, ctable, data)
+    Source(sch, ctable, data)
 end
 
 function schema(ctable::Metadata.CTable)
@@ -65,7 +65,9 @@ from disk until a particular field of the dataframe is accessed.
 
 To copy the entire file into memory, instead use `materialize`.
 """
-read(file::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP) = DataFrame(Source(file, use_mmap=use_mmap))
+function read(io::FilenameOrIO; use_mmap::Bool=SHOULD_USE_MMAP)
+    DataFrame(Source(io, use_mmap=use_mmap), copycols=false)
+end
 
 
 # TODO update docs
@@ -95,16 +97,16 @@ function materialize(s::Source, rows::AbstractVector{<:Integer}, cols::AbstractV
                     ) where {T<:Union{Symbol,<:Integer}}
     DataFrame((colname(s,col)=>materialize(s,rows,col) for col ∈ cols)...)
 end
-function materialize(file::AbstractString, rows::AbstractVector{<:Integer}, cols::AbstractVector{T}
+function materialize(io::FilenameOrIO, rows::AbstractVector{<:Integer}, cols::AbstractVector{T}
                     ) where {T<:Union{Symbol,<:Integer}}
-    materialize(Source(file), rows, cols)
+    materialize(Source(io), rows, cols)
 end
 function materialize(s::Source, cols::AbstractVector{<:Union{Symbol,<:Integer}})
     materialize(s, 1:size(s,1), cols)
 end
 
 materialize(s::Source) = materialize(s, 1:size(s,1), 1:size(s,2))
-materialize(file::AbstractString) = materialize(Source(file))
+materialize(io::FilenameOrIO) = materialize(Source(io))
 
 materialize(df::DataFrame) = DataFrame((n=>materialize(df[n]) for n ∈ names(df))...)
 

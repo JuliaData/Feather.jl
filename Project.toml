@@ -1,6 +1,6 @@
 name = "Feather"
 uuid = "becb17da-46f6-5d3c-ad1b-1c5fe96bc73c"
-version = "0.5.2"
+version = "0.5.3"
 
 [deps]
 Arrow = "69666777-d1a9-59fb-9406-91d4454c9d45"
@@ -13,7 +13,7 @@ Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 
 [compat]
 julia = "1.0"
-DataFrames = "0.18.0"
+DataFrames = "0.18, 0.19"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

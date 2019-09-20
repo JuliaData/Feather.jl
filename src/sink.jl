@@ -39,6 +39,11 @@ function getarrow(col::AbstractVector{Union{T, Missing}}) where {T}
     hasmissing = any(ismissing, col)
     return arrowformat(hasmissing ? col : convert(AbstractVector{T}, col))
 end
+function getarrow(col::AbstractVector{Missing})
+    throw(ArgumentError("Feather format does not support writing `AbstractVector{Missing}`. "*
+                        "Consider converting column to `AbstractVector{Union{T,Missing}}` where "*
+                        "`T` is a supported type."))
+end
 
 function Metadata.PrimitiveArray(A::ArrowVector{J}, off::Integer, nbytes::Integer) where J
     Metadata.PrimitiveArray(feathertype(J), Metadata.PLAIN, off, length(A), nullcount(A), nbytes)

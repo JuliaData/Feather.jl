@@ -81,6 +81,12 @@ GC.gc(); GC.gc()
     rm("testfile.feather")
 end
 
+@testset "issue#124" begin
+    df = DataFrame(A=rand(5), B=missings(5))
+    @test_throws ArgumentError Feather.write("test124.feather", df)
+    isfile("test124.feather") && rm("test124.feather")
+end
+
 if DO_PYTHON_ROUNDTRIP
 
 @testset "PythonRoundtrip" begin

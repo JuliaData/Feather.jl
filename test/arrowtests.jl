@@ -36,17 +36,17 @@ Feather.write(io, df)
 
 ndf = Feather.read(io)
 
-@test typeof(ndf[:ints]) == Primitive{Int32}
-@test typeof(ndf[:floats]) == Primitive{Float64}
-@test typeof(ndf[:dates]) == Primitive{Arrow.Datestamp}
-@test typeof(ndf[:datetimes]) == Primitive{Arrow.Timestamp{Dates.Millisecond}}
-@test typeof(ndf[:times]) == Primitive{Arrow.TimeOfDay{Dates.Nanosecond,Int64}}
-@test typeof(ndf[:missingints]) == NullablePrimitive{Int64}
-@test typeof(ndf[:strings]) == List{String,Arrow.DefaultOffset,Primitive{UInt8}}
-@test typeof(ndf[:missingstrings]) == NullableList{String,Arrow.DefaultOffset,Primitive{UInt8}}
-@test typeof(ndf[:catstrings]) == DictEncoding{String,Primitive{Int32},
+@test typeof(ndf.ints) == Primitive{Int32}
+@test typeof(ndf.floats) == Primitive{Float64}
+@test typeof(ndf.dates) == Primitive{Arrow.Datestamp}
+@test typeof(ndf.datetimes) == Primitive{Arrow.Timestamp{Dates.Millisecond}}
+@test typeof(ndf.times) == Primitive{Arrow.TimeOfDay{Dates.Nanosecond,Int64}}
+@test typeof(ndf.missingints) == NullablePrimitive{Int64}
+@test typeof(ndf.strings) == List{String,Arrow.DefaultOffset,Primitive{UInt8}}
+@test typeof(ndf.missingstrings) == NullableList{String,Arrow.DefaultOffset,Primitive{UInt8}}
+@test typeof(ndf.catstrings) == DictEncoding{String,Primitive{Int32},
                                                List{String,Arrow.DefaultOffset,Primitive{UInt8}}}
-@test typeof(ndf[:catstringsmissing]) ==
+@test typeof(ndf.catstringsmissing) ==
         DictEncoding{Union{String,Missing},NullablePrimitive{Int32},List{String,Arrow.DefaultOffset,
                                                                          Primitive{UInt8}}}
 

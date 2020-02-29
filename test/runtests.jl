@@ -63,7 +63,7 @@ const Nrows = 10
     seekstart(io)
     df2 = Feather.read(io)
     for col ∈ names(df)
-        @test df[col] == df2[col]
+        @test df[!, col] == df2[!, col]
     end
 end
 

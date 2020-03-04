@@ -9,10 +9,18 @@
 
 ## Installation
 
-The package is registered in `METADATA.jl` and so can be installed with `Pkg.add`.
+The package is registered in the `General` Registry and so can be installed with `Pkg.add`.
 
 ```julia
+julia> using Pkg
+
 julia> Pkg.add("Feather")
+```
+
+or from the Pkg REPL (accessed by typing `]` from the main REPL prompt/
+
+```
+] add Feather
 ```
 
 ## Documentation
@@ -22,7 +30,7 @@ julia> Pkg.add("Feather")
 
 ## Project Status
 
-The package is tested against Julia `1.0` and `1.1` on Linux, OS X, and Windows.
+The package is tested against Julia `1.0`, `1.1`, and `1.2` on Linux, OS X, and Windows.
 
 ## Contributing and Questions
 

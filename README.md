@@ -7,6 +7,16 @@
 |:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
 | [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
 
+
+## Project Status
+**NOTE:** Feather V1 has been deprecated by Apache Arrow in favor of Feather V2, which is
+just the Arrow IPC format written to disk.  A complete rewrite of Arrow.jl is actively
+being worked on which will support reading and writing Feather V2..  Currently Feather V2
+will not be recognized as a valid feather file by this package.
+
+The package is tested against Julia `1.0`, `1.1`, and `1.2` on Linux, OS X, and Windows.
+
+
 ## Installation
 
 The package is registered in the `General` Registry and so can be installed with `Pkg.add`.
@@ -28,15 +38,11 @@ or from the Pkg REPL (accessed by typing `]` from the main REPL prompt/
 - [**STABLE**][docs-stable-url] &mdash; **most recently tagged version of the documentation.**
 - [**LATEST**][docs-latest-url] &mdash; *in-development version of the documentation.*
 
-## Project Status
-
-The package is tested against Julia `1.0`, `1.1`, and `1.2` on Linux, OS X, and Windows.
 
 ## Contributing and Questions
 
 Contributions are very welcome, as are feature requests and suggestions. Please open an
 [issue][issues-url] if you encounter any problems or would just like to ask a question.
-
 
 
 [docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg

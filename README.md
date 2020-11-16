@@ -8,14 +8,18 @@
 | [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
 
 
-## Project Status
-**NOTE:** Feather V1 has been deprecated by Apache Arrow in favor of Feather V2, which is
-just the Arrow IPC format written to disk.  A complete rewrite of Arrow.jl is actively
-being worked on which will support reading and writing Feather V2..  Currently Feather V2
-will not be recognized as a valid feather file by this package.
+## ⚠ Project Status
+Feather.jl reads an older feather format now known as "Feather v1".  The current standard,
+Feather v2, is simply the [apache arrow](https://arrow.apache.org/) format written to
+disk.  As such, you're probably looking for
+[Arrow.jl](https://github.com/JuliaData/Arrow.jl) which will allow you to read and write
+Feather v2, but not feather v1.  We suggest that you upgrade any data you might have in
+the v1 format to v2 using this package together with Arrow.jl, or with
+[`pyarrow`](https://pypi.org/project/pyarrow/) which maintains support for the legacy
+feather format.
 
-The package is tested against Julia `1.0`, `1.1`, and `1.2` on Linux, OS X, and Windows.
-
+Please note that the maintainers of this package have moved on to the new format, so it is
+unlikely to receive updates and there may not be anyone available to review PR's.
 
 ## Installation
 

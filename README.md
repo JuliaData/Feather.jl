@@ -33,21 +33,21 @@ Contributions are very welcome, as are feature requests and suggestions. Please 
 
 
 [docs-latest-img]: https://img.shields.io/badge/docs-latest-blue.svg
-[docs-latest-url]: https://JuliaStats.github.io/Feather.jl/latest
+[docs-latest-url]: https://feather.juliadata.org/latest
 
 [docs-stable-img]: https://img.shields.io/badge/docs-stable-blue.svg
-[docs-stable-url]: https://JuliaStats.github.io/Feather.jl/stable
+[docs-stable-url]: https://feather.juliadata.org/stable
 
-[travis-img]: https://travis-ci.org/JuliaStats/Feather.jl.svg?branch=master
-[travis-url]: https://travis-ci.org/JuliaStats/Feather.jl
+[travis-img]: https://travis-ci.org/JuliaData/Feather.jl.svg?branch=master
+[travis-url]: https://travis-ci.org/JuliaData/Feather.jl
 
 [appveyor-img]: https://ci.appveyor.com/api/projects/status/h227adt6ovd1u3sx/branch/master?svg=true
-[appveyor-url]: https://ci.appveyor.com/project/JuliaStats/documenter-jl/branch/master
+[appveyor-url]: https://ci.appveyor.com/project/JuliaData/documenter-jl/branch/master
 
-[codecov-img]: https://codecov.io/gh/JuliaStats/Feather.jl/branch/master/graph/badge.svg
-[codecov-url]: https://codecov.io/gh/JuliaStats/Feather.jl
+[codecov-img]: https://codecov.io/gh/JuliaData/Feather.jl/branch/master/graph/badge.svg
+[codecov-url]: https://codecov.io/gh/JuliaData/Feather.jl
 
-[issues-url]: https://github.com/JuliaStats/Feather.jl/issues
+[issues-url]: https://github.com/JuliaData/Feather.jl/issues
 
 [pkg-0.4-img]: http://pkg.julialang.org/badges/Feather_0.4.svg
 [pkg-0.4-url]: http://pkg.julialang.org/?pkg=Feather

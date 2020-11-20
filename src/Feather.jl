@@ -1,6 +1,8 @@
 module Feather
 
-using Arrow, Mmap, Dates
+include("arrow/Arrow.jl")
+using .Arrow
+using Mmap, Dates
 using FlatBuffers, CategoricalArrays, DataFrames, Tables
 
 # in many cases we can load from a general IO, but if we get a string we assume it's a file

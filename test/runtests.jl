@@ -1,5 +1,5 @@
 using Feather, Test, CategoricalArrays
-using DataFrames, Arrow, Tables
+using DataFrames, Feather.Arrow, Tables
 using Random, Dates
 
 const ≅ = isequal

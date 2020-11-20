@@ -167,7 +167,7 @@ function constructcolumn(s::Source, ::Type{T}, col::Integer) where T
     col = getcolumn(s, col)
     constructcolumn(T, s.data, col.metadata, col)
 end
-constructcolumn(s::Source{NamedTuple{names, T}}, col::Integer) where {names, T} = constructcolumn(s, fieldtype(T, col), col)
+constructcolumn(s::Source{NamedTuple{names, T}}, col::Integer) where {names, T} = constructcolumn(s, fieldtype(T, Int(col)), col)
 constructcolumn(s::Source{NamedTuple{names, T}}, col::AbstractString) where {names, T} = constructcolumn(s, Tables.columnindex(names, Symbol(col)))
 
 constructall(s::Source) = ArrowVector[constructcolumn(s, i) for i ∈ 1:size(s,2)]

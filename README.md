@@ -1,12 +1,14 @@
 
 # Feather
 
+[![CI](https://github.com/JuliaData/StructTypes.jl/workflows/CI/badge.svg)](https://github.com/JuliaData/StructTypes.jl/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/JuliaData/StructTypes.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaData/StructTypes.jl)
+[![deps](https://juliahub.com/docs/StructTypes/deps.svg)](https://juliahub.com/ui/Packages/StructTypes/yjnue?t=2)
+[![deps](https://juliahub.com/docs/Feather/deps.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0?t=2)
+[![version](https://juliahub.com/docs/Feather/version.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
+[![pkgeval](https://juliahub.com/docs/Feather/pkgeval.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
+
 *Julia library for working with feather-formatted files*
-
-| **Documentation**                                                               | **Build Status**                                                                                |
-|:-------------------------------------------------------------------------------:|:-----------------------------------------------------------------------------------------------:|
-| [![][docs-stable-img]][docs-stable-url] [![][docs-latest-img]][docs-latest-url] | [![][travis-img]][travis-url] [![][appveyor-img]][appveyor-url] [![][codecov-img]][codecov-url] |
-
 
 ## ⚠ Project Status
 Feather.jl reads an older feather format now known as "Feather v1".  The current standard,

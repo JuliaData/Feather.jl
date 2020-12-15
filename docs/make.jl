@@ -1,15 +1,16 @@
 using Documenter, Feather
 
-makedocs(
-    modules = [Feather],
-    format = :html,
-    sitename = "Feather.jl",
-    pages = ["Home" => "index.md"]
+makedocs(;
+    modules=[Feather],
+    format=Documenter.HTML(),
+    pages=[
+        "Home" => "index.md",
+    ],
+    repo="https://github.com/JuliaData/Feather.jl/blob/{commit}{path}#L{line}",
+    sitename="Feather.jl",
+    assets=String[],
 )
 
-deploydocs(
-    deps = Deps.pip("mkdocs", "python-markdown-math"),
-    repo = "github.com/JuliaData/Feather.jl.git",
-    julia = "1.0",
-    osname = "linux"
+deploydocs(;
+    repo="github.com/JuliaData/Feather.jl",
 )

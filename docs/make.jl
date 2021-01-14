@@ -13,4 +13,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/JuliaData/Feather.jl",
+    devbranch = "main"
 )

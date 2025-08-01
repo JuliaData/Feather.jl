@@ -8,10 +8,10 @@
 [![version](https://juliahub.com/docs/Feather/version.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
 [![pkgeval](https://juliahub.com/docs/Feather/pkgeval.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
 
-*Julia library for working with feather-formatted files*
+*Julia library for working with files in the version 1 (older) Feather format*
 
 ## ⚠ Project Status
-Feather.jl reads an older feather format now known as "Feather v1".  The current standard,
+**Feather.jl reads an older feather format now known as "Feather v1".**  The current standard,
 Feather v2, is simply the [apache arrow](https://arrow.apache.org/) format written to
 disk.  As such, you're probably looking for
 [Arrow.jl](https://github.com/JuliaData/Arrow.jl) which will allow you to read and write

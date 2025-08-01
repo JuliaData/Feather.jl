@@ -164,7 +164,7 @@ function getrefs(x::CategoricalArray{Union{J,Missing},1,U}) where {J,U}
     refs
 end
 
-getlevels(x::CategoricalArray) = x.levels
+getlevels(x::CategoricalArray) = levels(x.pool)
 
 refsbytes(len::Integer) = padding(sizeof(Int32)*len)
 refsbytes(::Type{Union{J,Missing}}, len::Integer) where J = bitmaskbytes(len) + refsbytes(len)

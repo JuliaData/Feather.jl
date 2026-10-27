@@ -15,7 +15,8 @@ function validatedata(data::AbstractVector{UInt8})
 end
 
 loaddata(data::AbstractVector{UInt8}; use_mmap::Bool=true) = validatedata(data)
-loaddata(io::IOBuffer; use_mmap::Bool=true) = validatedata(io.data)
+# an IOBuffer is read whole, from its start, whatever its position (`io.data` can be larger than its contents)
+loaddata(io::IOBuffer; use_mmap::Bool=true) = validatedata(take!(copy(io)))
 loaddata(io::IO; use_mmap::Bool=true) = Base.read(io)
 function loaddata(filename::AbstractString; use_mmap::Bool=SHOULD_USE_MMAP)
     isfile(filename) || throw(ArgumentError("'$filename' does not exist."))

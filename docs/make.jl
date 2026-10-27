@@ -8,7 +8,7 @@ makedocs(;
     ],
     repo="https://github.com/JuliaData/Feather.jl/blob/{commit}{path}#L{line}",
     sitename="Feather.jl",
-    assets=String[],
+    checkdocs=:none,
 )
 
 deploydocs(;

@@ -219,7 +219,8 @@ function setnonmissing!(A::ArrowVector{J}, v::AbstractVector{T}) where {J,T<:Uni
 end
 
 
-Base.length(A::ArrowVector) = A.length
+# the stored length is an Int64; AbstractArray lengths must be Int (Int32 on 32-bit Julia)
+Base.length(A::ArrowVector) = Int(A.length)
 Base.size(A::ArrowVector) = (length(A),)
 function Base.size(A::ArrowVector, i::Integer)
     if i == 1

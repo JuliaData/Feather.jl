@@ -245,12 +245,6 @@ function totalbytes(::Type{Union{J,Missing}}, A::AbstractVector{Union{J,Missing}
 end
 
 
-@inline function unsafe_contiguous(A::Union{Primitive{J},NullablePrimitive{J}},
-                                   idx::AbstractVector{<:Integer}) where J
-    ptr = convert(Ptr{J}, valuespointer(A)) + (first(idx)-1)*sizeof(J)
-    unsafe_wrap(Array, ptr, length(idx))
-end
-
 
 """
     unsafe_getvalue(A::ArrowVector, i)
@@ -264,8 +258,13 @@ function unsafe_getvalue(A::Union{Primitive{J},NullablePrimitive{J}},
                          i::Integer)::J where J
     unsafe_load(convert(Ptr{J}, valuespointer(A)), i)
 end
-function unsafe_getvalue(A::AbstractPrimitive{T}, idx::UnitRange{<:Integer}) where T
-    copyto!(Vector{T}(undef, length(idx)), unsafe_contiguous(A, idx))
+# copies bytes rather than wrapping the values: they may be less aligned than `J`
+# (e.g. file bytes are only 4-byte aligned on 32-bit Julia), which `unsafe_wrap` rejects
+function unsafe_getvalue(A::Union{Primitive{J},NullablePrimitive{J}}, idx::UnitRange{<:Integer}) where J
+    v = Vector{J}(undef, length(idx))
+    src = valuespointer(A) + (first(idx)-1)*sizeof(J)
+    GC.@preserve v unsafe_copyto!(Ptr{UInt8}(pointer(v)), src, sizeof(v))
+    return v
 end
 function unsafe_getvalue(A::AbstractPrimitive{T}, idx::AbstractVector{<:Integer}) where T
     T[unsafe_getvalue(A, i) for i ∈ idx]

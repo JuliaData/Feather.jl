@@ -67,6 +67,19 @@ const Nrows = 10
     end
 end
 
+@testset "unaligned data" begin
+    # 32-bit Julia can return file bytes that are only 4-byte aligned
+    bytes = read(joinpath(testdir, "BOD.feather"))
+    buf = zeros(UInt8, length(bytes) + 8)
+    GC.@preserve buf begin
+        off = mod(4 - Int(UInt(pointer(buf)) % 8), 8)
+        data = unsafe_wrap(Array, pointer(buf) + off, length(bytes))
+        copyto!(data, bytes)
+        @test UInt(pointer(data)) % 8 == 4
+        @test isequal(DataFrame(Feather.Source(data)), DataFrame(Feather.Source(bytes)))
+    end
+end
+
 include("arrowtests.jl")
 
 GC.gc(); GC.gc()

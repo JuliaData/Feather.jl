@@ -1,9 +1,8 @@
 
 # Feather
 
-[![CI](https://github.com/JuliaData/StructTypes.jl/workflows/CI/badge.svg)](https://github.com/JuliaData/StructTypes.jl/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/JuliaData/StructTypes.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaData/StructTypes.jl)
-[![deps](https://juliahub.com/docs/StructTypes/deps.svg)](https://juliahub.com/ui/Packages/StructTypes/yjnue?t=2)
+[![CI](https://github.com/JuliaData/Feather.jl/workflows/CI/badge.svg)](https://github.com/JuliaData/Feather.jl/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/JuliaData/Feather.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JuliaData/Feather.jl)
 [![deps](https://juliahub.com/docs/Feather/deps.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0?t=2)
 [![version](https://juliahub.com/docs/Feather/version.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
 [![pkgeval](https://juliahub.com/docs/Feather/pkgeval.svg)](https://juliahub.com/ui/Packages/Feather/RgcL0)
